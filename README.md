@@ -5,7 +5,7 @@ This is an update of the supplied V2 project. V3 adds Room-backed scheduled remi
 ## Requirements
 - Android Studio with JDK 17
 - Android SDK Platform 36 and Build Tools 36.0.0 installed
-- Gradle 8.13 (the included `gradlew` scripts bootstrap this version; the archive intentionally does not use the binary Gradle Wrapper JAR)
+- Gradle 8.13 (the included `gradlew` scripts bootstrap this version on first run)
 
 ## Configure the AI proxy
 1. Deploy `proxy/worker.js` to Cloudflare Workers.
@@ -44,7 +44,7 @@ The reminder is stored in Room and scheduled with Android `AlarmManager`. Pendin
 - Conversation history remains opt-in.
 
 ## Release notes / limitations
-- This source package has not been built or tested on a physical Android device in this environment. Run the CI workflow or build in Android Studio before installing/releasing.
+- The debug APK has been built successfully; physical-device testing is still required before release.
 - Configure and test your own Cloudflare Worker and provider account. Provider model availability can change.
 - Complete and host the privacy policy template in `docs/PRIVACY_POLICY_TEMPLATE.md` before public release.
 - For a Play Store release, verify current target API, foreground-service declarations, data safety, and signing requirements.

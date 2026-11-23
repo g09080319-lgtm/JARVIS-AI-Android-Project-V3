@@ -1,8 +1,8 @@
 # JARVIS AI V3 — Feature status
 
-This is the updated source package. It has not been compiled or tested on a physical device in this environment. Treat all features as requiring device testing.
+The debug APK compiles successfully. App behavior has not been tested on a physical device; treat all features as requiring device testing.
 
-## Implemented in source (untested)
+## Implemented in source (device testing pending)
 | Area | Details |
 |---|---|
 | AI chat | HTTPS proxy call; last 30 messages; bounded request/response handling; retry for transient network, throttling, and server failures |

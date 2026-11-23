@@ -7,4 +7,3 @@ dependencyResolutionManagement {
 }
 rootProject.name = "JARVIS AI"
 include(":app")
-include(":app")
