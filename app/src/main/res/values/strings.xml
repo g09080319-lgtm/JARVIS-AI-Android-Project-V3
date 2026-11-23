@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">JARVIS AI</string>
+    <string name="notif_channel">JARVIS background assistant</string>
+</resources>
