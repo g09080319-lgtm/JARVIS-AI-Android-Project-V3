@@ -34,7 +34,7 @@ class VoiceListener(private val ctx: Context) {
                 onEnd("On-device speech recognition is unavailable. Always listening stays off.")
                 return false
             }
-            SpeechRecognizer.createOnDeviceSpeechRecognizer(ctx)
+            createOnDeviceRecognizer()
         } else {
             SpeechRecognizer.createSpeechRecognizer(ctx)
         }
@@ -81,6 +81,9 @@ class VoiceListener(private val ctx: Context) {
         })
         return true
     }
+
+    @android.annotation.TargetApi(Build.VERSION_CODES.S)
+    private fun createOnDeviceRecognizer() = SpeechRecognizer.createOnDeviceSpeechRecognizer(ctx)
 
     fun stop() {
         generation++

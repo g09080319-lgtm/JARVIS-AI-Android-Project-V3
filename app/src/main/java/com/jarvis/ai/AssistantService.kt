@@ -74,10 +74,10 @@ class AssistantService : Service() {
             .addAction(0, "Listen", svc(ACTION_LISTEN, 1))
             .addAction(0, "Stop", svc(ACTION_STOP, 2))
             .build()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             startForeground(ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
         } else {
-            // The typed overload was added in Android 10 (API 29).
+            // The microphone service type is available starting with Android 11 (API 30).
             startForeground(ID, n)
         }
     }
