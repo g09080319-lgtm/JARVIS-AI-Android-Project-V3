@@ -19,7 +19,12 @@ import kotlin.math.sin
 fun Waveform(mode: Mode, level: Float, modifier: Modifier = Modifier) {
     val t = rememberInfiniteTransition(label = "w")
     val phase by t.animateFloat(0f, 6.2832f, infiniteRepeatable(tween(1200, easing = LinearEasing)), label = "ph")
-    val amp = when (mode) { Mode.LISTENING -> 0.15f + level * 0.85f; Mode.SPEAKING -> 0.55f; Mode.THINKING -> 0.25f; Mode.IDLE -> 0.08f }
+    val amp = when (mode) {
+        Mode.LISTENING, Mode.WAKE_LISTENING -> 0.15f + level * 0.85f
+        Mode.SPEAKING -> 0.55f
+        Mode.THINKING -> 0.25f
+        Mode.IDLE -> 0.08f
+    }
     Canvas(modifier.fillMaxWidth().height(40.dp)) {
         val n = 28; val gap = size.width / n; val bw = gap * 0.5f
         for (i in 0 until n) {

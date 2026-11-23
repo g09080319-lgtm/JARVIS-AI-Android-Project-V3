@@ -68,7 +68,7 @@ On Windows, use `gradlew.bat --no-daemon assembleDebug`.
 
 The debug APK is created at `app/build/outputs/apk/debug/app-debug.apk`.
 
-GitHub Actions runs the same debug build on pushes to `main` / `master`, pull requests, and manual workflow dispatch. The APK is uploaded as the `jarvis-ai-debug-apk` workflow artifact.
+GitHub Actions runs Android unit tests and the debug build on pushes to `main` / `master`, pull requests, and manual workflow dispatch. The APK is uploaded as the `jarvis-ai-debug-apk` workflow artifact.
 
 ## V3 scheduled reminders
 Say a command such as:
@@ -77,12 +77,20 @@ Say a command such as:
 
 The reminder is stored in Room and scheduled with Android `AlarmManager`. Pending reminders are restored after device reboot. Android may defer non-exact alarms during Doze/battery-saving modes; exact-to-the-second delivery is not guaranteed. The reminder notification requires notification permission on Android 13+.
 
+## Voice, wake word, and background privacy
+- In **Settings**, enable **Always listen for “Hey JARVIS”** to use the wake phrase while JARVIS is open. It is off by default. Wake detection requires Android 12+ and an available on-device speech recognizer; unsupported devices leave the setting off. Say the English phrase “Hey JARVIS”; choose English, Urdu, or Hindi for the command and spoken response.
+- After a response, JARVIS listens for one follow-up utterance using on-device recognition; after silence, wake-word mode resumes.
+- Wake detection and follow-up speech recognition use Android's on-device recognizer. This is not a dedicated low-power DSP hotword engine and can use noticeable battery. The recognized command text is then handled locally or sent to the configured AI proxy; audio is not sent to the proxy.
+- To keep wake listening active after leaving the app or locking the screen, also enable **Background / locked-screen listening** while JARVIS is open. Android requires microphone permission, notification permission on Android 13+, and the persistent foreground-service notification. Use **Stop** in that notification to disable both settings and stop listening.
+- Android, manufacturer battery policies, and microphone privacy controls can still suspend or stop listening. JARVIS does not start microphone listening at boot, hide its notification, or bypass Android background-start restrictions. Turn off either switch at any time to stop wake listening.
+- Tap-to-talk remains available when wake-word support is unavailable. The device's standard speech-recognition service may process tap-to-talk audio according to that service's privacy policy.
+
 ## Existing safety behavior retained
 - WhatsApp and SMS messages are read back and require a spoken confirmation before the relevant app/composer is opened. JARVIS does not send them.
 - Calls open the dialer; the user places the call.
 - Alarms and timers are handed to the Clock app and must be checked there.
 - The app does not claim to change restricted Android settings or operate other apps invisibly.
-- Microphone capture starts only after an explicit user action. No always-on wake word is included.
+- Wake-word listening is opt-in, visible in the UI, uses on-device recognition, and requires a foreground notification to continue in the background.
 - Conversation history remains opt-in.
 
 ## Release notes / limitations

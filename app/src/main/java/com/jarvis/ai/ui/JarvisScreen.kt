@@ -30,11 +30,20 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.jarvis.ai.Mode
 
 @Composable
-fun JarvisScreen(vm: MainViewModel, onMic: () -> Unit, onBackground: (Boolean) -> Unit, onContacts: () -> Unit) {
+fun JarvisScreen(
+    vm: MainViewModel,
+    onMic: () -> Unit,
+    onBackground: (Boolean) -> Unit,
+    onAlwaysListening: (Boolean) -> Unit,
+    onContacts: () -> Unit
+) {
     val msgs by vm.messages.collectAsStateWithLifecycle()
     val mode by vm.mode.collectAsStateWithLifecycle()
     val partial by vm.partial.collectAsStateWithLifecycle()
@@ -46,6 +55,22 @@ fun JarvisScreen(vm: MainViewModel, onMic: () -> Unit, onBackground: (Boolean) -
     var showNotes by remember { mutableStateOf(false) }
     var input by remember { mutableStateOf("") }
     val list = rememberLazyListState()
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                androidx.lifecycle.Lifecycle.Event.ON_START -> vm.setActivityVisible(true)
+                androidx.lifecycle.Lifecycle.Event.ON_STOP -> vm.setActivityVisible(false)
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        vm.setActivityVisible(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED))
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            vm.setActivityVisible(false)
+        }
+    }
     LaunchedEffect(msgs.size) { if (msgs.isNotEmpty()) list.animateScrollToItem(msgs.size - 1) }
 
     Column(
@@ -62,6 +87,7 @@ fun JarvisScreen(vm: MainViewModel, onMic: () -> Unit, onBackground: (Boolean) -
         Text(
             error ?: when (mode) {
                 Mode.LISTENING -> partial.ifBlank { "Listening…" }
+                Mode.WAKE_LISTENING -> partial.ifBlank { "Listening for “Hey JARVIS”…" }
                 Mode.THINKING -> "Thinking…"
                 Mode.SPEAKING -> "Speaking…"
                 Mode.IDLE -> "Tap the microphone and speak"
@@ -93,7 +119,7 @@ fun JarvisScreen(vm: MainViewModel, onMic: () -> Unit, onBackground: (Boolean) -
             Spacer(Modifier.width(4.dp))
             Box(
                 Modifier.size(64.dp)
-                    .drawBehind { drawCircle(Brush.radialGradient(listOf(Cyan.copy(alpha = if (mode == Mode.LISTENING) 0.7f else 0.35f), Color.Transparent)), size.minDimension) }
+                    .drawBehind { drawCircle(Brush.radialGradient(listOf(Cyan.copy(alpha = if (mode == Mode.LISTENING || mode == Mode.WAKE_LISTENING) 0.7f else 0.35f), Color.Transparent)), size.minDimension) }
             ) {
                 FilledIconButton(onMic, Modifier.size(52.dp).align(Alignment.Center), shape = CircleShape,
                     colors = IconButtonDefaults.filledIconButtonColors(containerColor = Cyan, contentColor = DeepBlue)) {
@@ -140,9 +166,25 @@ fun JarvisScreen(vm: MainViewModel, onMic: () -> Unit, onBackground: (Boolean) -
                         Switch(prefs.saveHistory, { vm.setSaveHistory(it) })
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Background mode (notification controls)", Modifier.weight(1f))
+                        Text("Always listen for “Hey JARVIS”", Modifier.weight(1f))
+                        Switch(prefs.alwaysListening, onAlwaysListening, enabled = vm.wakeWordAvailable)
+                    }
+                    Text(
+                        if (vm.wakeWordAvailable) {
+                            "Off by default. Wake-word detection uses on-device speech recognition and may use extra battery. Spoken commands are handled according to your selected language and AI backend."
+                        } else {
+                            "Unavailable: this feature requires Android 12+ and an installed on-device speech recognizer. Tap the microphone to speak instead."
+                        },
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Background / locked-screen listening", Modifier.weight(1f))
                         Switch(prefs.background, { onBackground(it) })
                     }
+                    Text(
+                        "Requires Always Listening and the ongoing microphone notification. Start it while JARVIS is open; Android or device battery policies may still stop background listening.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
                     TextButton({ vm.clearHistory() }) { Text("Delete conversation history") }
                     TextButton({ onContacts() }) { Text("Allow contacts (call/text by name)") }
                     TextButton({ ctx.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }) { Text("Battery optimization settings") }

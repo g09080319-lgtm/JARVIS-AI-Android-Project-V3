@@ -21,8 +21,13 @@ fun Visualizer(mode: Mode, modifier: Modifier = Modifier) {
     val spin by t.animateFloat(0f, 360f, infiniteRepeatable(tween(9000, easing = LinearEasing)), label = "spin")
     val spin2 by t.animateFloat(360f, 0f, infiniteRepeatable(tween(14000, easing = LinearEasing)), label = "spin2")
     val pulse by t.animateFloat(0.85f, 1.15f,
-        infiniteRepeatable(tween(if (mode == Mode.LISTENING) 500 else 1600, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "p")
-    val strength = when (mode) { Mode.LISTENING -> 1f; Mode.SPEAKING -> 0.8f; Mode.THINKING -> 0.6f; Mode.IDLE -> 0.35f }
+        infiniteRepeatable(tween(if (mode == Mode.LISTENING || mode == Mode.WAKE_LISTENING) 500 else 1600, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "p")
+    val strength = when (mode) {
+        Mode.LISTENING, Mode.WAKE_LISTENING -> 1f
+        Mode.SPEAKING -> 0.8f
+        Mode.THINKING -> 0.6f
+        Mode.IDLE -> 0.35f
+    }
 
     Canvas(modifier.size(210.dp)) {
         val c = center
