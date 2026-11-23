@@ -8,12 +8,54 @@ This is an update of the supplied V2 project. V3 adds Room-backed scheduled remi
 - Gradle 8.13 (the included `gradlew` scripts bootstrap this version on first run)
 
 ## Configure the AI proxy
-1. Deploy `proxy/worker.js` to Cloudflare Workers.
-2. Add your provider key as a Worker secret: `wrangler secret put ANTHROPIC_API_KEY`.
-3. Optionally set the `ANTHROPIC_MODEL` Worker variable to a model currently enabled for your Anthropic account. The default in this project is `claude-sonnet-4-5-20250929`.
-4. Optionally set `ENABLE_WEB_SEARCH` to `true` if web search is enabled for your provider account.
-5. Copy `local.properties.example` to `local.properties` and set `JARVIS_PROXY_URL` to your HTTPS Worker endpoint, for example `https://your-worker.your-subdomain.workers.dev`.
-6. Keep provider keys and `local.properties` out of Git. Never put the Anthropic key in the Android app.
+The backend implementation is `proxy/worker.js`, configured by `proxy/wrangler.jsonc`. It is source code only: this repository does not include a deployed Worker URL or an Anthropic API key. Deploy it to your own Cloudflare account before configuring the app.
+
+The Android app sends an HTTPS `POST` to the exact `/chat` URL. The request JSON is `{"messages":[{"role":"user","content":"..."}],"language":"en-US"}` (up to 30 user/assistant messages); the Worker returns `{"reply":"..."}`. It forwards the request to Anthropic's Messages API. The provider key stays in a Cloudflare Worker secret. The Worker also requires its IP rate-limit binding and rejects requests if that binding or the provider secret is missing.
+
+### Deploy and test the backend
+1. Create an Anthropic API key in your Anthropic account. Do not paste it into the Android project or commit it.
+2. Install Node.js/npm if needed, open a terminal in the repository's `proxy` directory, then authenticate Wrangler:
+
+   ```powershell
+   npx wrangler@latest login
+   ```
+
+3. Before deploying, check `wrangler.jsonc`. Its rate-limit namespace ID (`1001`) must be a positive integer unique within your Cloudflare account; change it if that ID is already in use.
+4. Deploy the Worker:
+
+   ```powershell
+   npx wrangler@latest deploy
+   ```
+
+   Wrangler prints the actual HTTPS `workers.dev` URL for your account. The app endpoint is that URL with `/chat` appended; use the URL Wrangler actually reports, not a sample or placeholder.
+5. Add the provider key as a server-side secret. Wrangler prompts for the value; do not put it in the command line:
+
+   ```powershell
+   npx wrangler@latest secret put ANTHROPIC_API_KEY --name jarvis-ai-proxy
+   ```
+
+6. Test the live endpoint. Paste the actual URL from step 4 when prompted. This sends one request to Anthropic and may incur provider usage:
+
+   ```powershell
+   $proxyUrl = Read-Host "Paste the actual HTTPS Worker URL ending in /chat"
+   $body = '{"messages":[{"role":"user","content":"Reply exactly: JARVIS backend test OK"}],"language":"en-US"}'
+   Invoke-RestMethod -Uri $proxyUrl -Method Post -ContentType "application/json" -Body $body
+   ```
+
+   A successful test returns a JSON object with a non-empty `reply`. Do not treat deployment alone as a successful test.
+
+### Configure and test the Android app
+1. In the repository root, open your existing `local.properties` and keep its `sdk.dir` entry. Add a new line containing `JARVIS_PROXY_URL=` followed by the actual HTTPS Worker URL from step 4, including `/chat`. Do not copy the blank example over your existing file.
+2. Sync Gradle and rebuild/reinstall the app; the URL is embedded at build time:
+
+   ```powershell
+   .\gradlew.bat --no-daemon :app:assembleDebug
+   ```
+
+   Install `app/build/outputs/apk/debug/app-debug.apk`, ensure the device/emulator has internet access, and send a chat message.
+3. Keep `local.properties`, signing keys, and provider credentials out of Git. The Android app must contain only the Worker URL, never `ANTHROPIC_API_KEY`.
+
+The Worker rate limit is a best-effort per-IP limit (20 requests per 60 seconds per Cloudflare location); users behind the same NAT may share the limit. Add real user authentication and stricter account-level abuse controls before offering this public endpoint to multiple users.
 
 ## Build
 Open the extracted `JARVIS-AI-Android-Project-V3` project folder in Android Studio and allow Gradle sync. For a command-line build, use the included bootstrap script (it downloads Gradle 8.13 on first run):
