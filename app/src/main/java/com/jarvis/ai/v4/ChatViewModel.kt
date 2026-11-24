@@ -1,0 +1,102 @@
+package com.jarvis.ai.v4
+
+import android.app.Application
+import android.speech.tts.TextToSpeech
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import com.jarvis.ai.v4.data.AccessTokenStore
+import com.jarvis.ai.v4.data.ChatMessage
+import com.jarvis.ai.v4.data.SharedAiClient
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import java.util.Locale
+
+class ChatViewModel(application: Application) : AndroidViewModel(application) {
+    private val accessTokenStore = AccessTokenStore(application)
+    private val client = SharedAiClient(BuildConfig.API_BASE_URL)
+    private var accessToken = accessTokenStore.read()
+    private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
+    val messages: StateFlow<List<ChatMessage>> = _messages.asStateFlow()
+    private val _busy = MutableStateFlow(false)
+    val busy: StateFlow<Boolean> = _busy.asStateFlow()
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error.asStateFlow()
+    private val _language = MutableStateFlow("en-US")
+    val language: StateFlow<String> = _language.asStateFlow()
+    private val _hasAccessToken = MutableStateFlow(!accessToken.isNullOrBlank())
+    val hasAccessToken: StateFlow<Boolean> = _hasAccessToken.asStateFlow()
+
+    private var textToSpeech: TextToSpeech? = null
+    private var ttsReady = false
+
+    init {
+        textToSpeech = TextToSpeech(application) { status ->
+            ttsReady = status == TextToSpeech.SUCCESS
+            if (ttsReady) textToSpeech?.language = Locale.forLanguageTag(_language.value)
+        }
+    }
+
+    fun setAccessToken(value: String) {
+        val normalized = value.trim()
+        require(normalized.length <= 8_192) { "Access token is too long." }
+        accessToken = normalized
+        if (normalized.isEmpty()) accessTokenStore.clear() else accessTokenStore.write(normalized)
+        _hasAccessToken.value = normalized.isNotEmpty()
+        _error.value = null
+    }
+
+    fun setLanguage(value: String) {
+        _language.value = value
+        if (ttsReady) textToSpeech?.language = Locale.forLanguageTag(value)
+    }
+
+    fun stopSpeaking() {
+        textToSpeech?.stop()
+    }
+
+    fun reportVoiceError(message: String) {
+        _error.value = message
+    }
+
+    fun send(text: String) {
+        val message = text.trim()
+        if (message.isEmpty() || _busy.value) return
+        if (BuildConfig.API_BASE_URL.isBlank()) {
+            _error.value = "Configure JARVIS_API_BASE_URL in local.properties to connect the shared AI backend."
+            return
+        }
+        val token = accessToken
+        if (token.isNullOrBlank()) {
+            _error.value = "Add your signed-in API access token in Settings. No API key is stored in the app."
+            return
+        }
+
+        val next = _messages.value + ChatMessage(role = "user", content = message)
+        _messages.value = next
+        _busy.value = true
+        _error.value = null
+        viewModelScope.launch {
+            try {
+                val reply = client.chat(token, next.takeLast(30), _language.value)
+                _messages.value = _messages.value + ChatMessage(role = "assistant", content = reply)
+                if (ttsReady) {
+                    textToSpeech?.language = Locale.forLanguageTag(_language.value)
+                    textToSpeech?.speak(reply, TextToSpeech.QUEUE_FLUSH, null, "jarvis-reply")
+                }
+            } catch (exception: Exception) {
+                _messages.value = _messages.value.dropLast(1)
+                _error.value = exception.message ?: "The shared AI service could not be reached."
+            } finally {
+                _busy.value = false
+            }
+        }
+    }
+
+    override fun onCleared() {
+        textToSpeech?.stop()
+        textToSpeech?.shutdown()
+        textToSpeech = null
+    }
+}

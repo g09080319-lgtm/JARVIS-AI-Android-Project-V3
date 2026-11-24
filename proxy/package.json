@@ -1,0 +1,8 @@
+{
+  "name": "jarvis-v4-api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}

@@ -7,3 +7,12 @@ build/
 .idea/
 .kotlin/
 captures/
+node_modules/
+.env
+.env.*
+!.env.example
+.dev.vars*
+windows/**/bin/
+windows/**/obj/
+windows/publish/
+windows/Output/

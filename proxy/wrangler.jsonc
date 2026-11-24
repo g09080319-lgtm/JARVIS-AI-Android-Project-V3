@@ -1,0 +1,23 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "jarvis-v4-api",
+  "main": "worker.js",
+  "compatibility_date": "2026-11-24",
+  "vars": {
+    "OIDC_ISSUER": "https://YOUR_IDENTITY_PROVIDER/",
+    "OIDC_JWKS_URL": "https://YOUR_IDENTITY_PROVIDER/.well-known/jwks.json",
+    "OIDC_AUDIENCE": "YOUR_JARVIS_API_AUDIENCE",
+    "ALLOWED_ORIGINS": "",
+    "ANTHROPIC_MODEL": "claude-sonnet-4-5-20250929"
+  },
+  "ratelimits": [
+    {
+      "name": "RATE_LIMITER",
+      "namespace_id": "1001",
+      "simple": {
+        "limit": 30,
+        "period": 60
+      }
+    }
+  ]
+}
