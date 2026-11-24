@@ -59,14 +59,14 @@ dotnet publish windows/Jarvis.Desktop/Jarvis.Desktop.csproj -c Release -r win-x6
 & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" windows\installer.iss
 ```
 
-GitHub Actions runs backend tests, Android unit tests/lint/APK/AAB builds, an API 36 Google APIs emulator smoke test, and the Windows publish/installer build. Android test reports are retained as an artifact; successful package builds upload `jarvis-ai-v4-android` and `jarvis-ai-v4-windows`.
+GitHub Actions runs backend tests, Android unit tests/lint/APK/AAB builds, an Android 11 (API 30) Google APIs emulator smoke test, and the Windows publish/installer build. Android test reports are retained as an artifact; successful package builds upload `jarvis-ai-v4-android` and `jarvis-ai-v4-windows`.
 
 ## Current feature status
 
 | Capability | Status | Scope and evidence |
 | --- | --- | --- |
 | Android Kotlin/Gradle foundation, SDK 36, Java 17, Debug APK, unit tests, and lint | **WORKING AND TESTED** | `:app:testDebugUnitTest`, `:app:lintDebug`, and `:app:assembleDebug` pass locally. |
-| Android launch/settings/privacy-controls UI smoke test | **IMPLEMENTED BUT NOT TESTED** | Compose instrumentation test is wired to an API 36 Google APIs emulator in GitHub Actions; this checkout has no installed emulator image/device. |
+| Android launch/settings/privacy-controls UI smoke test | **IMPLEMENTED BUT NOT TESTED** | Compose instrumentation test is wired to an Android 11 (API 30) Google APIs emulator in GitHub Actions; the API 36 software-emulated runner failed to attach the instrumentation process. |
 | Android release AAB packaging | **IMPLEMENTED BUT NOT TESTED** | A bundle was produced before the latest notification changes; release signing is still needed for Play distribution. |
 | `JARVIS_PROXY_URL` to BuildConfig and Actions secret wiring | **IMPLEMENTED BUT NOT TESTED** | URL only; it is not an API credential. No actual deployment URL is configured here. |
 | Live AI chat, OIDC login, Anthropic requests | **REQUIRES API OR SERVER CONFIGURATION** | Existing Worker contract tests passed in earlier CI; this branch has no deployed Worker, identity provider, or Anthropic secret. Interactive sign-in is not implemented. |
