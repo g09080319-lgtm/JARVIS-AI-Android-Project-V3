@@ -57,6 +57,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
@@ -293,6 +294,7 @@ private fun AccessSettingsDialog(
                 NotificationSettingSwitch(
                     label = "Enable announcements",
                     checked = announcementsEnabled,
+                    testTag = "announcements-enabled",
                     onCheckedChange = {
                         announcementsEnabled = it
                         announcementPreferences.enabled = it
@@ -301,6 +303,7 @@ private fun AccessSettingsDialog(
                 NotificationSettingSwitch(
                     label = "Read message previews (off by default)",
                     checked = includePreview,
+                    testTag = "announcement-preview",
                     onCheckedChange = {
                         includePreview = it
                         announcementPreferences.includeMessagePreview = it
@@ -309,6 +312,7 @@ private fun AccessSettingsDialog(
                 NotificationSettingSwitch(
                     label = "Announce voice messages",
                     checked = announceVoiceMessages,
+                    testTag = "announcement-voice-messages",
                     onCheckedChange = {
                         announceVoiceMessages = it
                         announcementPreferences.announceVoiceMessages = it
@@ -317,6 +321,7 @@ private fun AccessSettingsDialog(
                 NotificationSettingSwitch(
                     label = "Announce calls and missed calls",
                     checked = announceCalls,
+                    testTag = "announcement-calls",
                     onCheckedChange = {
                         announceCalls = it
                         announcementPreferences.announceCalls = it
@@ -325,6 +330,7 @@ private fun AccessSettingsDialog(
                 NotificationSettingSwitch(
                     label = "Quiet hours",
                     checked = quietHoursEnabled,
+                    testTag = "announcement-quiet-hours",
                     onCheckedChange = {
                         quietHoursEnabled = it
                         announcementPreferences.quietHoursEnabled = it
@@ -403,6 +409,7 @@ private fun AccessSettingsDialog(
 private fun NotificationSettingSwitch(
     label: String,
     checked: Boolean,
+    testTag: String,
     onCheckedChange: (Boolean) -> Unit,
 ) {
     Row(
@@ -411,7 +418,11 @@ private fun NotificationSettingSwitch(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            modifier = Modifier.testTag(testTag),
+        )
     }
 }
 

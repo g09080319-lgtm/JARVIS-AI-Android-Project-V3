@@ -2,9 +2,9 @@ name: JARVIS AI V4
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop, "development/**", "feature/**", jarvis-v4-qa-fixes]
   pull_request:
-    branches: [main]
+    branches: [main, develop]
   workflow_dispatch:
 
 permissions:
@@ -49,12 +49,36 @@ jobs:
         with:
           gradle-version: "8.13"
 
-      - name: Run Android tests and build APK and AAB
+      - name: Run Android unit tests, lint, and package builds
+        id: android-build
         run: gradle --no-daemon --stacktrace :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:bundleRelease
         env:
           JARVIS_PROXY_URL: ${{ secrets.JARVIS_PROXY_URL }}
 
+      - name: Run Android emulator smoke tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          script: gradle --no-daemon --stacktrace :app:connectedDebugAndroidTest
+
+      - name: Upload Android test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jarvis-ai-v4-android-test-reports
+          path: |
+            app/build/reports/tests/testDebugUnitTest/
+            app/build/reports/lint-results-debug.html
+            app/build/outputs/androidTest-results/connected/
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Upload Android packages
+        if: always() && steps.android-build.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: jarvis-ai-v4-android
