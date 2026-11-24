@@ -50,7 +50,9 @@ jobs:
           gradle-version: "8.13"
 
       - name: Run Android tests and build APK and AAB
-        run: gradle --no-daemon --stacktrace :app:testDebugUnitTest :app:assembleDebug :app:bundleRelease
+        run: gradle --no-daemon --stacktrace :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:bundleRelease
+        env:
+          JARVIS_PROXY_URL: ${{ secrets.JARVIS_PROXY_URL }}
 
       - name: Upload Android packages
         uses: actions/upload-artifact@v4

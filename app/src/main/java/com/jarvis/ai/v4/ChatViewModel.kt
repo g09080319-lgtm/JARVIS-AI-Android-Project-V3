@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.jarvis.ai.v4.data.AccessTokenStore
 import com.jarvis.ai.v4.data.ChatMessage
 import com.jarvis.ai.v4.data.SharedAiClient
+import com.jarvis.ai.v4.notifications.NotificationAnnouncementPreferences
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -23,7 +24,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     val busy: StateFlow<Boolean> = _busy.asStateFlow()
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
-    private val _language = MutableStateFlow("en-US")
+    private val announcementPreferences = NotificationAnnouncementPreferences(application)
+    private val _language = MutableStateFlow(announcementPreferences.language)
     val language: StateFlow<String> = _language.asStateFlow()
     private val _hasAccessToken = MutableStateFlow(!accessToken.isNullOrBlank())
     val hasAccessToken: StateFlow<Boolean> = _hasAccessToken.asStateFlow()
@@ -49,6 +51,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setLanguage(value: String) {
         _language.value = value
+        announcementPreferences.language = value
         if (ttsReady) textToSpeech?.language = Locale.forLanguageTag(value)
     }
 
@@ -64,7 +67,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val message = text.trim()
         if (message.isEmpty() || _busy.value) return
         if (BuildConfig.API_BASE_URL.isBlank()) {
-            _error.value = "Configure JARVIS_API_BASE_URL in local.properties to connect the shared AI backend."
+            _error.value = "Configure JARVIS_PROXY_URL in local.properties to connect the shared AI backend."
             return
         }
         val token = accessToken

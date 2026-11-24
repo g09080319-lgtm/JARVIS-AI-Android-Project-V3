@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.provider.Settings
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
@@ -27,6 +29,8 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -35,6 +39,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -54,13 +59,21 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.jarvis.ai.v4.BuildConfig
 import com.jarvis.ai.v4.ChatViewModel
 import com.jarvis.ai.v4.data.ChatMessage
+import com.jarvis.ai.v4.notifications.NotificationAnnouncementPreferences
+import com.jarvis.ai.v4.notifications.WhatsAppNotificationListener
 
 @Composable
 fun JarvisScreen(viewModel: ChatViewModel) {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val announcementPreferences = remember(context) { NotificationAnnouncementPreferences(context) }
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val busy by viewModel.busy.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
@@ -69,6 +82,19 @@ fun JarvisScreen(viewModel: ChatViewModel) {
     var input by remember { mutableStateOf("") }
     var showSettings by remember { mutableStateOf(false) }
     var tokenDraft by remember { mutableStateOf("") }
+    var notificationAccessEnabled by remember(context) {
+        mutableStateOf(WhatsAppNotificationListener.hasNotificationAccess(context))
+    }
+
+    DisposableEffect(context, lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                notificationAccessEnabled = WhatsAppNotificationListener.hasNotificationAccess(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     Column(
         Modifier.fillMaxSize()
@@ -82,6 +108,7 @@ fun JarvisScreen(viewModel: ChatViewModel) {
                 Text("J.A.R.V.I.S", color = Color(0xFF61E6FF), style = MaterialTheme.typography.headlineSmall)
                 Text("V4 · shared AI", color = Color.LightGray, style = MaterialTheme.typography.labelMedium)
             }
+            TextButton(onClick = viewModel::stopSpeaking) { Text("Stop voice") }
             TextButton(onClick = {
                 tokenDraft = ""
                 showSettings = true
@@ -93,7 +120,7 @@ fun JarvisScreen(viewModel: ChatViewModel) {
                 busy -> "Thinking…"
                 !error.isNullOrBlank() -> error.orEmpty()
                 !hasToken -> "Add an identity access token in Settings to connect securely."
-                BuildConfig.API_BASE_URL.isBlank() -> "Set JARVIS_API_BASE_URL in local.properties."
+                BuildConfig.API_BASE_URL.isBlank() -> "Set JARVIS_PROXY_URL in local.properties."
                 else -> "Ready · ${languageLabel(language)} · this conversation stays in memory only"
             },
             color = if (error.isNullOrBlank()) Color(0xFF9EDDEA) else MaterialTheme.colorScheme.error,
@@ -153,6 +180,8 @@ fun JarvisScreen(viewModel: ChatViewModel) {
             hasToken = hasToken,
             language = language,
             onLanguage = viewModel::setLanguage,
+            announcementPreferences = announcementPreferences,
+            notificationAccessEnabled = notificationAccessEnabled,
             onSave = {
                 if (tokenDraft.isNotBlank() || !hasToken) viewModel.setAccessToken(tokenDraft)
                 showSettings = false
@@ -192,15 +221,33 @@ private fun AccessSettingsDialog(
     hasToken: Boolean,
     language: String,
     onLanguage: (String) -> Unit,
+    announcementPreferences: NotificationAnnouncementPreferences,
+    notificationAccessEnabled: Boolean,
     onSave: () -> Unit,
     onClear: () -> Unit,
     onClose: () -> Unit,
 ) {
+    val context = LocalContext.current
+    var announcementsEnabled by remember { mutableStateOf(announcementPreferences.enabled) }
+    var includePreview by remember { mutableStateOf(announcementPreferences.includeMessagePreview) }
+    var announceVoiceMessages by remember { mutableStateOf(announcementPreferences.announceVoiceMessages) }
+    var announceCalls by remember { mutableStateOf(announcementPreferences.announceCalls) }
+    var quietHoursEnabled by remember { mutableStateOf(announcementPreferences.quietHoursEnabled) }
+    var quietStart by remember { mutableStateOf(announcementPreferences.quietStart) }
+    var quietEnd by remember { mutableStateOf(announcementPreferences.quietEnd) }
+    var mutedSenders by remember {
+        mutableStateOf(announcementPreferences.mutedSenders.filterNot { it == "*" }.joinToString(", "))
+    }
+    var notificationSettingsError by remember { mutableStateOf<String?>(null) }
+
     AlertDialog(
         onDismissRequest = onClose,
-        title = { Text("Secure connection") },
+        title = { Text("Settings") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                modifier = Modifier.heightIn(max = 560.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 Text("Backend: ${BuildConfig.API_BASE_URL.ifBlank { "not configured" }}")
                 Text("Paste a short-lived access token from your configured identity provider. The app encrypts it with Android Keystore; it is not an Anthropic API key.")
                 OutlinedTextField(
@@ -221,6 +268,124 @@ private fun AccessSettingsDialog(
                         )
                     }
                 }
+                Text("WhatsApp announcements", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    if (notificationAccessEnabled) {
+                        "Notification access is enabled. Android can expose only the details WhatsApp places in its notifications."
+                    } else {
+                        "Notification access is not enabled. Allow JARVIS in Android's Notification access settings to receive announcements."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Button(onClick = {
+                    notificationSettingsError = null
+                    runCatching {
+                        context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                    }.onFailure {
+                        notificationSettingsError = "Android notification access settings could not be opened."
+                    }
+                }) {
+                    Text(if (notificationAccessEnabled) "Review notification access" else "Open notification access settings")
+                }
+                notificationSettingsError?.let {
+                    Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                }
+                NotificationSettingSwitch(
+                    label = "Enable announcements",
+                    checked = announcementsEnabled,
+                    onCheckedChange = {
+                        announcementsEnabled = it
+                        announcementPreferences.enabled = it
+                    },
+                )
+                NotificationSettingSwitch(
+                    label = "Read message previews (off by default)",
+                    checked = includePreview,
+                    onCheckedChange = {
+                        includePreview = it
+                        announcementPreferences.includeMessagePreview = it
+                    },
+                )
+                NotificationSettingSwitch(
+                    label = "Announce voice messages",
+                    checked = announceVoiceMessages,
+                    onCheckedChange = {
+                        announceVoiceMessages = it
+                        announcementPreferences.announceVoiceMessages = it
+                    },
+                )
+                NotificationSettingSwitch(
+                    label = "Announce calls and missed calls",
+                    checked = announceCalls,
+                    onCheckedChange = {
+                        announceCalls = it
+                        announcementPreferences.announceCalls = it
+                    },
+                )
+                NotificationSettingSwitch(
+                    label = "Quiet hours",
+                    checked = quietHoursEnabled,
+                    onCheckedChange = {
+                        quietHoursEnabled = it
+                        announcementPreferences.quietHoursEnabled = it
+                    },
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = quietStart,
+                        onValueChange = { value ->
+                            quietStart = value
+                            if (value.matches(Regex("([01]\\d|2[0-3]):[0-5]\\d"))) {
+                                announcementPreferences.quietStart = value
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                        label = { Text("Quiet from") },
+                        supportingText = { Text("HH:mm") },
+                        singleLine = true,
+                    )
+                    OutlinedTextField(
+                        value = quietEnd,
+                        onValueChange = { value ->
+                            quietEnd = value
+                            if (value.matches(Regex("([01]\\d|2[0-3]):[0-5]\\d"))) {
+                                announcementPreferences.quietEnd = value
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                        label = { Text("Quiet until") },
+                        supportingText = { Text("HH:mm") },
+                        singleLine = true,
+                    )
+                }
+                OutlinedTextField(
+                    value = mutedSenders,
+                    onValueChange = { value ->
+                        mutedSenders = value
+                        try {
+                            announcementPreferences.mutedSenders = value.split(',', '\n').toSet()
+                            notificationSettingsError = null
+                        } catch (exception: Exception) {
+                            notificationSettingsError = "Could not securely save the muted-sender list on this device."
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Muted senders (comma separated)") },
+                    supportingText = { Text("Matches the sender text exposed by WhatsApp; no contacts are read.") },
+                    minLines = 1,
+                    maxLines = 3,
+                )
+                if (announcementPreferences.mutedSenderFiltersUnreadable) {
+                    Text(
+                        "Encrypted muted-sender settings could not be read. Announcements are suppressed until you save a replacement list.",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                Text(
+                    "Previews are hidden by default. Announcements depend on WhatsApp notification content and Android access. Speech uses the selected TTS language and current system audio volume. No WhatsApp messages or call audio are read from private storage.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
                 Text("Chat history is session-only and is cleared when the app process ends.")
             }
         },
@@ -232,6 +397,22 @@ private fun AccessSettingsDialog(
             }
         },
     )
+}
+
+@Composable
+private fun NotificationSettingSwitch(
+    label: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
 }
 
 @Composable
