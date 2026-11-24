@@ -79,7 +79,7 @@ jobs:
 
   android-emulator:
     needs: android
-    runs-on: macos-15
+    runs-on: ubuntu-latest
     steps:
       - name: Check out source
         uses: actions/checkout@v5
@@ -106,11 +106,14 @@ jobs:
         with:
           api-level: 36
           target: google_apis
-          arch: arm64-v8a
+          arch: x86_64
           profile: pixel_2
-          emulator-boot-timeout: 300
+          emulator-boot-timeout: 900
+          disable-linux-hw-accel: true
           disable-animations: true
           script: gradle --no-daemon --stacktrace :app:connectedDebugAndroidTest
+        env:
+          ANDROID_I_WANT_MY_TCG: "yes"
 
       - name: Upload Android emulator test reports
         if: always()
