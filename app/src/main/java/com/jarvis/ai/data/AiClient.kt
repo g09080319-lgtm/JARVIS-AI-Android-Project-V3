@@ -13,17 +13,34 @@ import java.net.URL
 class AiClient {
     suspend fun ask(history: List<Message>, lang: String): String = withContext(Dispatchers.IO) {
         val endpoint = BuildConfig.PROXY_URL.trim()
-        if (endpoint.isBlank()) return@withContext "AI backend not configured. Set JARVIS_PROXY_URL in local.properties."
-        if (!endpoint.startsWith("https://", ignoreCase = true)) {
+        if (endpoint.isBlank()) {
+            return@withContext "AI backend not configured. Deploy proxy/worker.js, set JARVIS_PROXY_URL to its HTTPS /chat URL in local.properties, then rebuild the app."
+        }
+        val endpointUrl = runCatching { URL(endpoint) }.getOrNull()
+            ?: return@withContext "The AI backend URL is invalid."
+        if (!endpointUrl.protocol.equals("https", ignoreCase = true)) {
             return@withContext "The AI backend URL must use HTTPS."
+        }
+        if (endpointUrl.path != "/chat") {
+            return@withContext "The AI backend URL must end in /chat."
         }
 
         val messages = JSONArray()
-        history.takeLast(30).forEach { message ->
-            if (message.role in setOf("user", "assistant") && message.text.isNotBlank()) {
-                messages.put(JSONObject().put("role", message.role).put("content", message.text.take(4000)))
+        var remainingCharacters = 64_000
+        val boundedHistory = history.asReversed()
+            .asSequence()
+            .filter { it.role in setOf("user", "assistant") && it.text.isNotBlank() }
+            .take(30)
+            .mapNotNull { message ->
+                if (remainingCharacters == 0) return@mapNotNull null
+                val text = message.text.take(minOf(4_000, remainingCharacters))
+                remainingCharacters -= text.length
+                if (text.isBlank()) null else JSONObject().put("role", message.role).put("content", text)
             }
-        }
+            .toList()
+            .asReversed()
+        boundedHistory.forEach(messages::put)
+
         if (messages.length() == 0) return@withContext "There is no message to send to the AI service."
         val body = JSONObject().put("messages", messages).put("language", lang).toString().toByteArray(Charsets.UTF_8)
 
@@ -31,7 +48,7 @@ class AiClient {
         for (attempt in 0..1) {
             var connection: HttpURLConnection? = null
             try {
-                connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
+                connection = (endpointUrl.openConnection() as HttpURLConnection).apply {
                     requestMethod = "POST"
                     connectTimeout = 12_000
                     readTimeout = 45_000
@@ -50,10 +67,12 @@ class AiClient {
                     return@withContext if (!reply.isNullOrBlank()) reply else "The AI service returned an empty response. Please try again."
                 }
 
-                lastError = when (status) {
-                    401, 403 -> "The AI proxy rejected its credentials. Check the server configuration."
-                    429 -> "The AI service is busy. Please wait a moment and try again."
-                    in 500..599 -> "The AI service is temporarily unavailable (HTTP $status)."
+                val errorCode = runCatching { JSONObject(responseText).optString("error") }.getOrNull()
+                lastError = when {
+                    errorCode == "proxy_not_configured" -> "The AI backend is missing its server-side API key or rate-limit configuration."
+                    status == 401 || status == 403 -> "The AI proxy rejected its credentials. Check the server configuration."
+                    status == 429 -> "The AI service is busy. Please wait a moment and try again."
+                    status in 500..599 -> "The AI service is temporarily unavailable (HTTP $status)."
                     else -> "The AI proxy returned an error (HTTP $status)."
                 }
                 if (status !in 500..599 && status != 429) return@withContext lastError

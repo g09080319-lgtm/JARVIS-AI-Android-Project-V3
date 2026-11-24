@@ -16,6 +16,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val rms = engine.rms
     val error = engine.error
     val prefs = engine.prefs
+    val wakeWordAvailable = engine.wakeWordAvailable
 
     fun send(t: String) = engine.submit(t)
     fun stopSpeaking() = engine.stopSpeaking()
@@ -28,5 +29,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun setPitch(v: Float) = viewModelScope.launch { engine.settings.setPitch(v) }
     fun setSaveHistory(v: Boolean) = viewModelScope.launch { engine.settings.setSaveHistory(v); if (!v) engine.clearHistory() }
     fun setBackground(v: Boolean) = viewModelScope.launch { engine.settings.setBackground(v) }
+    fun setAlwaysListening(v: Boolean) = engine.setAlwaysListening(v)
+    fun setActivityVisible(v: Boolean) = engine.setActivityVisible(v)
     fun consentAsked() = viewModelScope.launch { engine.settings.setConsentAsked() }
 }

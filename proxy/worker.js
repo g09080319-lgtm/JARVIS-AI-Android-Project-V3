@@ -1,8 +1,9 @@
 // Cloudflare Worker proxy. The Anthropic API key stays in a Worker secret, never in the APK.
-// Deploy: wrangler deploy proxy/worker.js --name jarvis-proxy
-// Secret: wrangler secret put ANTHROPIC_API_KEY
-// Optional: wrangler secret put ENABLE_WEB_SEARCH (value "true")
-// Optional: set ANTHROPIC_MODEL as a Worker variable if you want to pin another supported model.
+
+const MAX_REQUEST_BYTES = 512_000;
+const MAX_CONVERSATION_CHARACTERS = 64_000;
+const MAX_MESSAGE_CHARACTERS = 4_000;
+const MAX_MESSAGES = 30;
 
 const SYSTEM = (lang) =>
   `You are JARVIS, a witty, polite personal assistant that answers by voice. Keep replies short (1-4 sentences) unless asked for more. ` +
@@ -12,16 +13,13 @@ const SYSTEM = (lang) =>
   `You cannot send messages, place calls, set alarms or change phone settings yourself; the app does those. Never claim an action succeeded. ` +
   `(Speech locale hint: ${String(lang || "en-US").slice(0, 24)}.)`;
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
+const responseHeaders = {
   "Content-Type": "application/json; charset=utf-8",
   "Cache-Control": "no-store",
 };
 
 const json = (data, status = 200) =>
-  new Response(JSON.stringify(data), { status, headers: corsHeaders });
+  new Response(JSON.stringify(data), { status, headers: responseHeaders });
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -53,28 +51,52 @@ async function callAnthropic(payload, apiKey) {
 
 export default {
   async fetch(req, env) {
-    if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders });
+    if (new URL(req.url).pathname !== "/chat") return json({ error: "not_found" }, 404);
+    if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: { "Cache-Control": "no-store" } });
     if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
-    if (!env.ANTHROPIC_API_KEY) return json({ error: "proxy_not_configured" }, 503);
+    if (!env.ANTHROPIC_API_KEY || !env.AI_RATE_LIMITER) {
+      return json({ error: "proxy_not_configured" }, 503);
+    }
 
-    const declaredLength = Number(req.headers.get("content-length") || 0);
-    if (declaredLength > 128_000) return json({ error: "request_too_large" }, 413);
+    const clientIp = req.headers.get("CF-Connecting-IP");
+    if (!clientIp) return json({ error: "client_ip_unavailable" }, 503);
+
+    try {
+      const { success } = await env.AI_RATE_LIMITER.limit({ key: clientIp });
+      if (!success) return json({ error: "rate_limited" }, 429);
+    } catch {
+      return json({ error: "rate_limiter_unavailable" }, 503);
+    }
+
+    const contentLength = req.headers.get("content-length");
+    if (contentLength !== null && (!/^\d+$/.test(contentLength) || Number(contentLength) > MAX_REQUEST_BYTES)) {
+      return json({ error: "request_too_large" }, 413);
+    }
 
     let body;
     try {
-      body = await req.json();
+      const requestText = await req.text();
+      if (new TextEncoder().encode(requestText).byteLength > MAX_REQUEST_BYTES) {
+        return json({ error: "request_too_large" }, 413);
+      }
+      body = JSON.parse(requestText);
     } catch {
       return json({ error: "invalid_json" }, 400);
     }
 
     if (!Array.isArray(body?.messages)) return json({ error: "messages_required" }, 400);
-    const messages = body.messages.slice(-30).map((message) => ({
-      role: message?.role === "assistant" ? "assistant" : "user",
-      content: String(message?.content ?? "").slice(0, 4000),
-    })).filter((message) => message.content.trim().length > 0);
+    const messages = body.messages.slice(-MAX_MESSAGES)
+      .filter((message) =>
+        (message?.role === "user" || message?.role === "assistant") &&
+        typeof message?.content === "string")
+      .map((message) => ({
+        role: message.role,
+        content: message.content.slice(0, MAX_MESSAGE_CHARACTERS),
+      }))
+      .filter((message) => message.content.trim().length > 0);
 
     if (!messages.length) return json({ error: "messages_required" }, 400);
-    if (messages.reduce((total, message) => total + message.content.length, 0) > 100_000) {
+    if (messages.reduce((total, message) => total + message.content.length, 0) > MAX_CONVERSATION_CHARACTERS) {
       return json({ error: "conversation_too_large" }, 413);
     }
 

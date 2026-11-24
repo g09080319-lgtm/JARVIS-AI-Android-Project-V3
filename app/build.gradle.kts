@@ -76,4 +76,6 @@ dependencies {
     val room = "2.7.2"
     implementation("androidx.room:room-runtime:$room")
     ksp("androidx.room:room-compiler:$room")
+
+    testImplementation("junit:junit:4.13.2")
 }

@@ -27,46 +27,61 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            var pendingBackgroundStart by remember { mutableStateOf(false) }
+            var pendingPermissionAction by remember { mutableStateOf("") }
             val perms = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { r ->
-                if (r[Manifest.permission.RECORD_AUDIO] == true) {
-                    if (pendingBackgroundStart) {
-                        pendingBackgroundStart = false
+                val action = pendingPermissionAction
+                pendingPermissionAction = ""
+                val audioGranted = r[Manifest.permission.RECORD_AUDIO] == true || vm.engine.hasMic()
+                val notificationsGranted = Build.VERSION.SDK_INT < 33 ||
+                    r[Manifest.permission.POST_NOTIFICATIONS] == true ||
+                    checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                when {
+                    action == "background" && audioGranted && notificationsGranted -> {
                         vm.setBackground(true)
                         startForegroundService(Intent(this, AssistantService::class.java).setAction(AssistantService.ACTION_START))
-                    } else {
-                        vm.engine.toggleListen()
                     }
-                } else {
-                    pendingBackgroundStart = false
+                    action == "background" -> {
+                        vm.engine.error.value = "Microphone and notification permissions are needed for background listening."
+                    }
+                    action == "always" && audioGranted -> vm.setAlwaysListening(true)
+                    action == "always" -> vm.engine.error.value = "Microphone permission is needed for Always Listening."
+                    action == "mic" && audioGranted -> vm.engine.toggleListen()
+                    action == "mic" -> vm.engine.error.value = "Microphone permission is needed to speak to JARVIS."
                 }
             }
             val contacts = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
-            fun missingAudioOrNotificationPermission(): Boolean =
-                !vm.engine.hasMic() || (Build.VERSION.SDK_INT >= 33 &&
-                    checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED)
-            fun requestAudioAndNotifications() {
+            fun requestPermissions(action: String, includeNotifications: Boolean) {
+                pendingPermissionAction = action
                 perms.launch(buildList {
                     add(Manifest.permission.RECORD_AUDIO)
-                    if (Build.VERSION.SDK_INT >= 33) add(Manifest.permission.POST_NOTIFICATIONS)
+                    if (includeNotifications && Build.VERSION.SDK_INT >= 33) add(Manifest.permission.POST_NOTIFICATIONS)
                 }.toTypedArray())
             }
             JarvisTheme {
                 JarvisScreen(
                     vm = vm,
                     onMic = {
-                        if (missingAudioOrNotificationPermission()) requestAudioAndNotifications()
-                        else vm.engine.toggleListen()
+                        if (vm.engine.hasMic()) vm.engine.toggleListen()
+                        else requestPermissions("mic", includeNotifications = false)
                     },
-                    onBackground = { on ->
-                        if (on && missingAudioOrNotificationPermission()) {
-                            pendingBackgroundStart = true
-                            requestAudioAndNotifications()
+                    onAlwaysListening = { enabled ->
+                        if (!enabled) vm.setAlwaysListening(false)
+                        else if (vm.engine.hasMic()) vm.setAlwaysListening(true)
+                        else requestPermissions("always", includeNotifications = false)
+                    },
+                    onBackground = { enabled ->
+                        if (enabled) {
+                            val notificationMissing = Build.VERSION.SDK_INT >= 33 &&
+                                checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED
+                            if (!vm.engine.hasMic() || notificationMissing) {
+                                requestPermissions("background", includeNotifications = true)
+                            } else {
+                                vm.setBackground(true)
+                                startForegroundService(Intent(this, AssistantService::class.java).setAction(AssistantService.ACTION_START))
+                            }
                         } else {
-                            vm.setBackground(on)
-                            val i = Intent(this, AssistantService::class.java).setAction(
-                                if (on) AssistantService.ACTION_START else AssistantService.ACTION_STOP)
-                            if (on) startForegroundService(i) else startService(i)
+                            vm.setBackground(false)
+                            startService(Intent(this, AssistantService::class.java).setAction(AssistantService.ACTION_STOP_BACKGROUND))
                         }
                     },
                     onContacts = { contacts.launch(Manifest.permission.READ_CONTACTS) }
