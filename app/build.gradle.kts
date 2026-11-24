@@ -12,6 +12,10 @@ val localProperties = Properties().apply {
 val signingProperties = Properties().apply {
     rootProject.file("keystore.properties").takeIf { it.exists() }?.inputStream()?.use(::load)
 }
+val proxyUrl = providers.gradleProperty("jarvisProxyUrl").orNull
+    ?: System.getenv("JARVIS_PROXY_URL")
+    ?: localProperties.getProperty("JARVIS_PROXY_URL")
+    ?: localProperties.getProperty("JARVIS_API_BASE_URL", "")
 
 android {
     namespace = "com.jarvis.ai.v4"
@@ -23,10 +27,10 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "4.0.0"
-        val apiBaseUrl = localProperties.getProperty("JARVIS_API_BASE_URL", "")
+        val escapedProxyUrl = proxyUrl
             .replace("\\", "\\\\")
             .replace("\"", "\\\"")
-        buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
+        buildConfigField("String", "API_BASE_URL", "\"$escapedProxyUrl\"")
     }
 
     if (signingProperties.isNotEmpty()) {
