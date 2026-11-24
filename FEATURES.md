@@ -1,29 +1,25 @@
-# JARVIS AI V3 — Feature status
+# JARVIS AI V4 — Feature status
 
-The debug APK compiles successfully. App behavior has not been tested on a physical device; treat all features as requiring device testing.
+The existing V3 Android project has been upgraded in source. CI is configured to run tests and produce a downloadable debug APK. Hardware-dependent voice behavior, a deployed AI Worker, and release signing still require owner/device setup and testing.
 
 ## Implemented in source (device testing pending)
 | Area | Details |
 |---|---|
-| AI chat | HTTPS proxy call; last 30 messages; bounded request/response handling; retry for transient network, throttling, and server failures |
-| AI proxy | Cloudflare Worker validates requests, limits message count/size, handles OPTIONS, uses configurable model, times out upstream calls, retries transient failures, and returns sanitized errors |
-| Voice | Tap-to-talk; opt-in “Hey JARVIS” wake phrase using Android on-device speech recognition; on-device follow-up turns; TextToSpeech; English, Urdu, and Hindi settings; animated waveform |
-| UI | Existing Compose interface, chat, waveform, settings, notes/tasks, dark theme, splash, adaptive icon |
-| Background controls | Optional microphone foreground service and persistent notification; background/locked-screen wake listening requires explicit switches and Android permissions |
-| WhatsApp / SMS | Read-back and confirmation required; opens the chat/composer only; never auto-sends |
-| Calls | Opens dialer; user confirms call |
-| Alarms / timers | Uses Android Clock intents; user checks/starts them in Clock |
-| Scheduled reminders | One-shot reminders such as “remind me to stretch in 10 minutes”; saved in Room, scheduled via AlarmManager, notified when due, pending alarms restored after reboot |
-| Notes / tasks | Stored on-device in Room |
-| Weather / device commands | Existing V2 behavior retained |
+| Hands-free voice | Opt-in “Hey JARVIS” detection with Android on-device speech recognition, automatic wake-listening restart and follow-up turns; explicit visible status in the UI |
+| Background listening | User-started microphone foreground service and persistent notification controls; microphone and notification permission handling |
+| Languages and speech | English, Urdu, Hindi locale choices; text-to-speech response; language/script-aware reply speech |
+| AI conversation | HTTPS proxy client with bounded recent conversation context, transport/error handling, retry for transient failures; conversation history persistence is opt-in |
+| AI proxy | Cloudflare Worker source keeps the provider key server-side, validates/bounds requests, applies configured rate limiting, and returns sanitized errors |
+| Android actions | Existing command router uses supported intents/APIs for app launching, web search, navigation, volume/media, alarms/timers, reminders, flashlight, notes/tasks, and confirmation-gated messaging/calls |
+| UI | Existing Compose chat, voice status/visualizer, settings, notes/tasks, theme, splash, adaptive icon |
+| Reminders | Room-backed one-shot reminders scheduled with AlarmManager and restored after reboot |
+| CI | GitHub Actions proxy tests, Android unit tests, debug APK build, and `jarvis-ai-debug-apk` artifact |
 
-## Platform and product limitations
-- Android may defer non-exact reminder alarms during Doze or battery-saving modes. Exact-to-the-second delivery is not promised.
-- Reminder notifications require notification permission on Android 13+.
-- Wake-word support requires Android 12+ and an available on-device recognizer; the wake phrase is English (“Hey JARVIS”). Audio remains with Android's on-device recognition service; recognized commands may be sent as text to the configured AI backend. This is not a dedicated low-power DSP engine and can use noticeable battery.
-- Background microphone service must be started while the app is visible. Android and device-manufacturer battery policies may stop it; there is no boot-time microphone start or hidden listening.
-- WhatsApp / SMS are not automatically sent; user taps Send in the destination app.
-- Calls are not automatically placed.
-- Android restricts direct changes to some system settings; JARVIS opens settings pages instead.
-- Locked-screen/background app launches remain subject to Android restrictions.
-- A public privacy policy, release signing, Play Console declarations, and device testing are still the owner's responsibility.
+## Setup and platform limitations
+- AI chat requires deploying `proxy/worker.js`, storing the provider key as a Cloudflare secret, and setting `JARVIS_PROXY_URL` to the actual HTTPS `/chat` endpoint in local `local.properties`; rebuild after changing it. The URL is not a secret. The API key must never be shipped in the APK.
+- Wake phrase is English (“Hey JARVIS”), and requires Android 12+ plus an installed on-device recognizer. Command locale is selectable, but recognition availability/quality and Urdu/Hindi models depend on the device speech service.
+- Wake detection uses a repeated speech-recognition session, not a dedicated low-power DSP hotword engine; expect increased battery use. Background/locked-screen mode must be explicitly started while the app is visible and requires a persistent microphone notification. Android restrictions, microphone privacy settings, battery saver, and manufacturer optimization may still stop it; there is no boot-time auto-start or hidden listening.
+- App-specific operations inside YouTube, Play Store, Chrome, and other apps may not be exposed through supported Android intents. JARVIS can launch apps or open general web searches where supported but cannot invisibly tap/type in third-party apps. Some system actions require user confirmation or manual completion.
+- Android may defer non-exact reminders during Doze. Reminder and foreground-service notification behavior depends on runtime notification permission (Android 13+).
+- WhatsApp/SMS are not auto-sent; the user reviews and taps Send. Calls open the dialer; the user places the call. Android restricts changing some settings directly.
+- Physical-device testing, live Worker validation, public privacy policy, release signing, and Play Console declarations remain necessary before release.
