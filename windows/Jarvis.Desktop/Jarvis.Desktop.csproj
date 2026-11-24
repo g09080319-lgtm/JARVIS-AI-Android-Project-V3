@@ -9,7 +9,6 @@
     <RootNamespace>Jarvis.Desktop</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.0" />
     <PackageReference Include="System.Speech" Version="10.0.0" />
   </ItemGroup>
 </Project>
