@@ -1,51 +1,19 @@
-# JARVIS AI V3 — Android / Kotlin / Jetpack Compose
+# JARVIS AI V4 — repository preparation
 
-This is an update of the supplied V2 project. V3 adds Room-backed scheduled reminders, more resilient AI proxy communication, and a GitHub Actions Android build. Existing confirmation and Android-safety behavior is retained.
+This repository is being prepared for the JARVIS AI V4 rebuild. This cleanup removes the obsolete V3 Android application and its V3-specific build and release files; it does not implement V4 features.
 
-## Requirements
-- Android Studio with JDK 17
-- Android SDK Platform 36 and Build Tools 36.0.0 installed
-- Gradle 8.13 (the included `gradlew` scripts bootstrap this version on first run)
+## V4 target
 
-## Configure the AI proxy
-1. Deploy `proxy/worker.js` to Cloudflare Workers.
-2. Add your provider key as a Worker secret: `wrangler secret put ANTHROPIC_API_KEY`.
-3. Optionally set the `ANTHROPIC_MODEL` Worker variable to a model currently enabled for your Anthropic account. The default in this project is `claude-sonnet-4-5-20250929`.
-4. Optionally set `ENABLE_WEB_SEARCH` to `true` if web search is enabled for your provider account.
-5. Copy `local.properties.example` to `local.properties` and set `JARVIS_PROXY_URL` to your HTTPS Worker endpoint, for example `https://your-worker.your-subdomain.workers.dev`.
-6. Keep provider keys and `local.properties` out of Git. Never put the Anthropic key in the Android app.
+The planned product includes an Android application, Windows 10/11 desktop application, JARVIS AI Cloud and cloud computing, AI software development and coding workspace, mobile/PC cleaner, advanced voice assistant, WhatsApp notification announcements, video editing, content creation, social media management, and a secure shared AI backend.
 
-## Build
-Open the extracted `JARVIS-AI-Android-Project-V3` project folder in Android Studio and allow Gradle sync. For a command-line build, use the included bootstrap script (it downloads Gradle 8.13 on first run):
+These are planned capabilities, not implemented or verified deliverables. The V3 project and its full Git history are preserved on the `backup/jarvis-v3-before-v4` branch.
 
-```bash
-./gradlew --no-daemon assembleDebug
-```
+## Retained backend reference
 
-On Windows, use `gradlew.bat --no-daemon assembleDebug`.
+`proxy/worker.js` is the existing Cloudflare Worker source retained for future backend work. It is not a deployed service and has not been verified as a production-ready shared backend. Do not put provider keys or other secrets in this repository; configure them as server-side secrets when a backend is deployed.
 
-The debug APK is created at `app/build/outputs/apk/debug/app-debug.apk`.
+`local.properties.example` and `keystore.properties.example` contain placeholders only. Copy and configure them locally when the Android build is restored; never commit the resulting local configuration or signing keys.
 
-GitHub Actions runs the same debug build on pushes to `main` / `master`, pull requests, and manual workflow dispatch. The APK is uploaded as the `jarvis-ai-debug-apk` workflow artifact.
+## Repository status
 
-## V3 scheduled reminders
-Say a command such as:
-- `remind me to stretch in 10 minutes`
-- `remind me to call Ali in 2 hours`
-
-The reminder is stored in Room and scheduled with Android `AlarmManager`. Pending reminders are restored after device reboot. Android may defer non-exact alarms during Doze/battery-saving modes; exact-to-the-second delivery is not guaranteed. The reminder notification requires notification permission on Android 13+.
-
-## Existing safety behavior retained
-- WhatsApp and SMS messages are read back and require a spoken confirmation before the relevant app/composer is opened. JARVIS does not send them.
-- Calls open the dialer; the user places the call.
-- Alarms and timers are handed to the Clock app and must be checked there.
-- The app does not claim to change restricted Android settings or operate other apps invisibly.
-- Microphone capture starts only after an explicit user action. No always-on wake word is included.
-- Conversation history remains opt-in.
-
-## Release notes / limitations
-- The debug APK has been built successfully; physical-device testing is still required before release.
-- Configure and test your own Cloudflare Worker and provider account. Provider model availability can change.
-- Complete and host the privacy policy template in `docs/PRIVACY_POLICY_TEMPLATE.md` before public release.
-- For a Play Store release, verify current target API, foreground-service declarations, data safety, and signing requirements.
-- Do not commit `local.properties`, signing keys, or provider secrets.
+The V4 application, desktop, cloud, and feature modules still need to be designed and implemented. The GitHub Actions workflow now verifies the retained scaffold; V4-specific build and test jobs should be added with their modules. The obsolete V3 Android APK workflow behavior and Codemagic configuration were removed because they referred to the deleted V3 app module.
