@@ -21,7 +21,8 @@ class JarvisScreenSmokeTest {
 
     @Test
     fun launchSettingsAndPrivacyControlsWork() {
-        composeRule.onNodeWithText("J.A.R.V.I.S").assertIsDisplayed()
+        composeRule.onNodeWithText("AIVO").assertIsDisplayed()
+        composeRule.onNodeWithText("ONE AI. EVERY TASK.").assertIsDisplayed()
         composeRule.onNodeWithText("SYSTEM STATUS").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Animated cyan holographic circuit line").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Start voice recognition").assertIsDisplayed()
@@ -38,6 +39,6 @@ class JarvisScreenSmokeTest {
         composeRule.onNodeWithText("हिन्दी").performClick()
         composeRule.onNodeWithText("हिन्दी").assertIsSelected()
         composeRule.onNodeWithText("Close").performClick()
-        composeRule.onNodeWithText("J.A.R.V.I.S").assertIsDisplayed()
+        composeRule.onNodeWithText("AIVO").assertIsDisplayed()
     }
 }

@@ -1,6 +1,6 @@
-#define AppName "JARVIS AI"
+#define AppName "AIVO"
 #define AppVersion "4.0.0"
-#define AppPublisher "JARVIS AI"
+#define AppPublisher "AIVO"
 #define AppExeName "Jarvis.Desktop.exe"
 
 [Setup]
@@ -11,7 +11,7 @@ AppPublisher={#AppPublisher}
 DefaultDirName={autopf}\JARVIS AI
 DefaultGroupName={#AppName}
 OutputDir=Output
-OutputBaseFilename=JARVIS-AI-V4-Setup
+OutputBaseFilename=AIVO-Setup
 ArchitecturesInstallIn64BitMode=x64
 PrivilegesRequired=lowest
 WizardStyle=modern
@@ -21,11 +21,11 @@ UninstallDisplayIcon={app}\{#AppExeName}
 Source: "publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\JARVIS AI"; Filename: "{app}\{#AppExeName}"
-Name: "{autodesktop}\JARVIS AI"; Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
+Name: "{group}\AIVO"; Filename: "{app}\{#AppExeName}"
+Name: "{autodesktop}\AIVO"; Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional icons:"
 
 [Run]
-Filename: "{app}\{#AppExeName}"; Description: "Launch JARVIS AI"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#AppExeName}"; Description: "Launch AIVO"; Flags: nowait postinstall skipifsilent

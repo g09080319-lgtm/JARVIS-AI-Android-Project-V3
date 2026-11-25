@@ -1,3 +1,6 @@
 # Copy to local.properties (never commit it).
-# Set this to your deployed HTTPS Worker origin (without a path).
-JARVIS_PROXY_URL=
+# Canonical: deployed HTTPS Worker origin (without a path).
+AIVO_PROXY_URL=
+# Legacy aliases remain accepted during migration:
+# JARVIS_PROXY_URL=
+# JARVIS_API_BASE_URL=

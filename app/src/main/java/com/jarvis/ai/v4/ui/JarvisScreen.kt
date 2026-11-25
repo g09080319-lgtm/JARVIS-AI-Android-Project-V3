@@ -173,23 +173,23 @@ fun JarvisScreen(viewModel: ChatViewModel) {
                         settingsError = null
                         showSettings = true
                     },
-                    modifier = Modifier.semantics { contentDescription = "Open JARVIS menu and settings" },
+                    modifier = Modifier.semantics { contentDescription = "Open AIVO menu and settings" },
                 ) {
                     Text("☰", color = JarvisPalette.cyan, style = MaterialTheme.typography.headlineSmall)
                 }
                 Column(Modifier.weight(1f)) {
                     Text(
-                        "J.A.R.V.I.S",
+                        "AIVO",
                         color = JarvisPalette.cyan,
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Light,
                     )
-                    Text("V4 · SHARED AI", color = JarvisPalette.muted, style = MaterialTheme.typography.labelSmall)
+                    Text("ONE AI. EVERY TASK.", color = JarvisPalette.muted, style = MaterialTheme.typography.labelSmall)
                 }
                 TextButton(
                     enabled = speaking,
                     onClick = viewModel::stopSpeaking,
-                    modifier = Modifier.semantics { contentDescription = "Stop JARVIS speech" },
+                    modifier = Modifier.semantics { contentDescription = "Stop AIVO speech" },
                 ) {
                     Text(if (speaking) "◼ Stop" else "Voice", color = JarvisPalette.cyan)
                 }
@@ -223,7 +223,7 @@ fun JarvisScreen(viewModel: ChatViewModel) {
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                DashboardShortcut("▤", "Chat\nwith JARVIS", Modifier.weight(1f).heightIn(min = if (landscape) 36.dp else if (compact) 65.dp else 78.dp), compact = landscape) {
+                DashboardShortcut("▤", "Chat\nwith AIVO", Modifier.weight(1f).heightIn(min = if (landscape) 36.dp else if (compact) 65.dp else 78.dp), compact = landscape) {
                     focusRequester.requestFocus()
                 }
                 DashboardShortcut("◉", "Voice\nAssistant", Modifier.weight(1f).heightIn(min = if (landscape) 36.dp else if (compact) 65.dp else 78.dp), compact = landscape) {
@@ -287,7 +287,7 @@ fun JarvisScreen(viewModel: ChatViewModel) {
                 OutlinedTextField(
                     value = input,
                     onValueChange = { input = it },
-                    placeholder = { Text("Ask JARVIS…", color = JarvisPalette.muted) },
+                    placeholder = { Text("Ask AIVO…", color = JarvisPalette.muted) },
                     shape = RoundedCornerShape(28.dp),
                     maxLines = 3,
                     colors = OutlinedTextFieldDefaults.colors(
@@ -335,7 +335,7 @@ fun JarvisScreen(viewModel: ChatViewModel) {
                         containerColor = Color(0xFF0756A5),
                         disabledContainerColor = Color(0xFF12243A),
                     ),
-                    modifier = Modifier.height(if (landscape) 42.dp else 54.dp).semantics { contentDescription = "Send message to JARVIS" },
+                    modifier = Modifier.height(if (landscape) 42.dp else 54.dp).semantics { contentDescription = "Send message to AIVO" },
                 ) { Text("➤ Send", color = Color.White, fontWeight = FontWeight.SemiBold) }
             }
             NeonCircuitLine(Modifier.fillMaxWidth().height(if (landscape) 6.dp else if (compact) 18.dp else 24.dp))
@@ -586,7 +586,7 @@ private fun AccessSettingsDialog(
                 modifier = Modifier.heightIn(max = 560.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text("Connect to your deployed JARVIS Worker using the HTTPS origin and a short-lived OIDC access token.")
+                Text("Connect to your deployed AIVO service using its HTTPS origin and a short-lived OIDC access token.")
                 OutlinedTextField(
                     value = endpointDraft,
                     onValueChange = onEndpointChanged,
@@ -622,7 +622,7 @@ private fun AccessSettingsDialog(
                     if (notificationAccessEnabled) {
                         "Notification access is enabled. Android can expose only the details WhatsApp places in its notifications."
                     } else {
-                        "Notification access is not enabled. Allow JARVIS in Android's Notification access settings to receive announcements."
+                        "Notification access is not enabled. Allow AIVO in Android's Notification access settings to receive announcements."
                     },
                     style = MaterialTheme.typography.bodySmall,
                 )

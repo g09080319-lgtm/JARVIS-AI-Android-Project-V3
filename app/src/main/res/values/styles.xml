@@ -1,0 +1,15 @@
+<resources>
+    <style name="Theme.Aivo" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:colorAccent">#20DFFF</item>
+        <item name="android:statusBarColor">#020814</item>
+        <item name="android:navigationBarColor">#020814</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowActionModeOverlay">true</item>
+    </style>
+
+    <style name="Theme.Aivo.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#020814</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/aivo_launcher</item>
+        <item name="postSplashScreenTheme">@style/Theme.Aivo</item>
+    </style>
+</resources>

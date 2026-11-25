@@ -82,7 +82,7 @@ internal fun JarvisOrb(state: CoreState, modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
             .aspectRatio(1f)
-            .semantics { contentDescription = "JARVIS AI core, ${state.label}" },
+            .semantics { contentDescription = "AIVO AI core, ${state.label}" },
         contentAlignment = Alignment.Center,
     ) {
         Canvas(Modifier.fillMaxSize()) {
@@ -143,7 +143,7 @@ internal fun JarvisOrb(state: CoreState, modifier: Modifier = Modifier) {
             modifier = Modifier.padding(12.dp),
         ) {
             Text(
-                text = "JARVIS",
+                text = "AIVO",
                 color = JarvisPalette.cyan,
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Light,

@@ -1,4 +1,4 @@
-name: JARVIS AI V4
+name: AIVO
 
 on:
   push:
@@ -53,27 +53,34 @@ jobs:
         id: android-build
         run: gradle --no-daemon --stacktrace :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:bundleRelease
         env:
-          JARVIS_PROXY_URL: ${{ secrets.JARVIS_PROXY_URL }}
+          AIVO_PROXY_URL: ${{ secrets.AIVO_PROXY_URL || secrets.JARVIS_PROXY_URL }}
 
       - name: Upload Android unit-test and lint reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: jarvis-ai-v4-android-unit-reports
+          name: aivo-android-unit-reports
           path: |
             app/build/reports/tests/testDebugUnitTest/
             app/build/reports/lint-results-debug.html
           if-no-files-found: warn
           retention-days: 14
 
-      - name: Upload Android packages
+      - name: Upload Android debug APK
         if: always() && steps.android-build.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
-          name: jarvis-ai-v4-android
-          path: |
-            app/build/outputs/apk/debug/*.apk
-            app/build/outputs/bundle/release/*.aab
+          name: aivo-android-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload Android release AAB build
+        if: always() && steps.android-build.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: aivo-android-release-aab
+          path: app/build/outputs/bundle/release/*.aab
           if-no-files-found: error
           retention-days: 14
 
@@ -120,7 +127,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: jarvis-ai-v4-android-emulator-reports
+          name: aivo-android-emulator-reports
           path: |
             app/build/reports/tests/
             app/build/outputs/androidTest-results/connected/
@@ -152,7 +159,7 @@ jobs:
       - name: Upload Windows installer
         uses: actions/upload-artifact@v4
         with:
-          name: jarvis-ai-v4-windows
-          path: windows/Output/JARVIS-AI-V4-Setup.exe
+          name: aivo-windows-installer
+          path: windows/Output/AIVO-Setup.exe
           if-no-files-found: error
           retention-days: 14

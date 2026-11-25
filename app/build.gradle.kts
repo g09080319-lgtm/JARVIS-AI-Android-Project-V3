@@ -12,10 +12,19 @@ val localProperties = Properties().apply {
 val signingProperties = Properties().apply {
     rootProject.file("keystore.properties").takeIf { it.exists() }?.inputStream()?.use(::load)
 }
-val proxyUrl = providers.gradleProperty("jarvisProxyUrl").orNull
-    ?: System.getenv("JARVIS_PROXY_URL")
-    ?: localProperties.getProperty("JARVIS_PROXY_URL")
-    ?: localProperties.getProperty("JARVIS_API_BASE_URL", "")
+val proxyUrl = sequenceOf(
+    providers.gradleProperty("AIVO_PROXY_URL").orNull,
+    providers.gradleProperty("aivoProxyUrl").orNull,
+    System.getenv("AIVO_PROXY_URL"),
+    localProperties.getProperty("AIVO_PROXY_URL"),
+    providers.gradleProperty("JARVIS_PROXY_URL").orNull,
+    providers.gradleProperty("JARVIS_API_BASE_URL").orNull,
+    providers.gradleProperty("jarvisProxyUrl").orNull,
+    System.getenv("JARVIS_PROXY_URL"),
+    System.getenv("JARVIS_API_BASE_URL"),
+    localProperties.getProperty("JARVIS_PROXY_URL"),
+    localProperties.getProperty("JARVIS_API_BASE_URL"),
+).firstOrNull { !it.isNullOrBlank() }.orEmpty()
 
 android {
     namespace = "com.jarvis.ai.v4"
@@ -70,6 +79,7 @@ dependencies {
     implementation(composeBom)
     androidTestImplementation(composeBom)
     implementation("androidx.activity:activity-compose:1.9.3")
+    implementation("androidx.core:core-splashscreen:1.0.1")
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.ui:ui")

@@ -102,7 +102,7 @@ test("chat validates identity, rate limits per subject, and forwards bounded mes
   const response = await worker.fetch(new Request("https://jarvis.test/v1/chat", {
     method: "POST",
     headers: { authorization: `Bearer ${accessToken}`, "content-type": "application/json" },
-    body: JSON.stringify({ language: "en-US", messages: [{ role: "user", content: "  Hi JARVIS  " }] }),
+    body: JSON.stringify({ language: "en-US", messages: [{ role: "user", content: "  Hi AIVO  " }] }),
   }), env({ RATE_LIMITER: { limit: async ({ key }) => { rateKey = key; return { success: true }; } } }));
 
   assert.equal(response.status, 200);
@@ -110,7 +110,8 @@ test("chat validates identity, rate limits per subject, and forwards bounded mes
   assert.match(rateKey, /^[0-9a-f]{64}$/);
   const upstream = calls.find((call) => call.url.includes("anthropic.com"));
   const payload = JSON.parse(upstream.init.body);
-  assert.deepEqual(payload.messages, [{ role: "user", content: "Hi JARVIS" }]);
+  assert.deepEqual(payload.messages, [{ role: "user", content: "Hi AIVO" }]);
+  assert.match(payload.system, /You are AIVO/);
   assert.equal(upstream.init.headers["x-api-key"], "test-only");
 });
 

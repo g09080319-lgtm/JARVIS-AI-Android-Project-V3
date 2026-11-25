@@ -23,9 +23,13 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         DataContext = this;
-        EndpointBox.Text = Environment.GetEnvironmentVariable("JARVIS_PROXY_URL")
-            ?? Environment.GetEnvironmentVariable("JARVIS_API_BASE_URL")
-            ?? _settings.ReadEndpoint();
+        EndpointBox.Text = new[]
+        {
+            Environment.GetEnvironmentVariable("AIVO_PROXY_URL"),
+            Environment.GetEnvironmentVariable("JARVIS_PROXY_URL"),
+            Environment.GetEnvironmentVariable("JARVIS_API_BASE_URL"),
+            _settings.ReadEndpoint(),
+        }.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)) ?? "";
         TokenBox.Password = _settings.ReadToken() ?? "";
         UpdateConnectionStatus();
         NetworkStateText.Text = NetworkInterface.GetIsNetworkAvailable() ? "Online" : "Offline";
