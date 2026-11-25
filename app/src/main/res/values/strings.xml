@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">AIVO</string>
+    <string name="aivo_tagline">One AI. Every Task.</string>
+    <string name="aivo_wake_word">Hey AIVO</string>
+</resources>

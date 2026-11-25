@@ -1,4 +1,4 @@
-# JARVIS AI V4
+# AIVO V4
 
 V4 development starts with a working chat-and-voice client on Android and Windows, connected to a shared Cloudflare Worker API. This is an initial implementation, not the complete V4 feature set.
 
@@ -19,7 +19,7 @@ The Worker is source code only. This repository does not contain a deployed URL,
 2. Set `ALLOWED_ORIGINS` to the exact comma-separated browser origins that may call the API. Native Android and Windows clients do not send a browser origin.
 3. Change the rate-limit `namespace_id` in `proxy/wrangler.jsonc` to a positive integer available in your Cloudflare account.
 4. From `proxy`, run `npx wrangler@latest login`, then `npx wrangler@latest deploy`.
-5. Add the provider key only as a Cloudflare secret: `npx wrangler@latest secret put ANTHROPIC_API_KEY --name jarvis-v4-api`.
+5. Add the provider key only as a Cloudflare secret: `npx wrangler@latest secret put ANTHROPIC_API_KEY --name aivo-v4-api`.
 6. Configure `JARVIS_API_BASE_URL` as the actual HTTPS Worker origin (without `/v1/chat`) in Android's ignored `local.properties`; set the same origin in the Windows app. Obtain a valid short-lived OIDC access token from your identity provider and enter it in each client.
 
 Do not commit provider keys, access tokens, `.dev.vars`, local properties, or signing keys. The checked-in `wrangler.jsonc` values are configuration placeholders and are not live service details. No deployment or live provider call is claimed.

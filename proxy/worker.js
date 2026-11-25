@@ -236,7 +236,7 @@ export default {
     const payload = {
       model: env.ANTHROPIC_MODEL || "claude-sonnet-4-5-20250929",
       max_tokens: 800,
-      system: `You are JARVIS, a careful personal assistant. Reply concisely in the user's language (${language}). Never claim a device action was completed; the client performs device actions.`,
+      system: `You are AIVO, a careful personal AI operating assistant. Reply concisely in the user's language (${language}). Never claim a device action was completed; the client performs device actions.`,
       messages,
     };
 

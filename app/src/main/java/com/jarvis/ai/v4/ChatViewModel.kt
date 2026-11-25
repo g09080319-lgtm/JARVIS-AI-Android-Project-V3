@@ -52,6 +52,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         if (ttsReady) textToSpeech?.language = Locale.forLanguageTag(value)
     }
 
+    fun clearMessages() {
+        if (_busy.value) return
+        _messages.value = emptyList()
+        _error.value = null
+    }
+
     fun stopSpeaking() {
         textToSpeech?.stop()
     }
@@ -64,7 +70,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val message = text.trim()
         if (message.isEmpty() || _busy.value) return
         if (BuildConfig.API_BASE_URL.isBlank()) {
-            _error.value = "Configure JARVIS_API_BASE_URL in local.properties to connect the shared AI backend."
+            _error.value = "Configure AIVO_PROXY_URL in local.properties to connect the shared AI backend."
             return
         }
         val token = accessToken
@@ -83,7 +89,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 _messages.value = _messages.value + ChatMessage(role = "assistant", content = reply)
                 if (ttsReady) {
                     textToSpeech?.language = Locale.forLanguageTag(_language.value)
-                    textToSpeech?.speak(reply, TextToSpeech.QUEUE_FLUSH, null, "jarvis-reply")
+                    textToSpeech?.speak(reply, TextToSpeech.QUEUE_FLUSH, null, "aivo-reply")
                 }
             } catch (exception: Exception) {
                 _messages.value = _messages.value.dropLast(1)

@@ -23,7 +23,13 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "4.0.0"
-        val apiBaseUrl = localProperties.getProperty("JARVIS_API_BASE_URL", "")
+        val apiBaseUrl = sequenceOf(
+            "AIVO_PROXY_URL",
+            "JARVIS_PROXY_URL",
+            "JARVIS_API_BASE_URL",
+        ).map { localProperties.getProperty(it, "") }
+            .firstOrNull { it.isNotBlank() }
+            .orEmpty()
             .replace("\\", "\\\\")
             .replace("\"", "\\\"")
         buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")

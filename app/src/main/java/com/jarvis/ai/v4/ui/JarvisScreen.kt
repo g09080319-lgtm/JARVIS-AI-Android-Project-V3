@@ -10,6 +10,11 @@ import android.speech.SpeechRecognizer
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -47,6 +52,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -79,21 +85,26 @@ fun JarvisScreen(viewModel: ChatViewModel) {
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.weight(1f)) {
-                Text("J.A.R.V.I.S", color = Color(0xFF61E6FF), style = MaterialTheme.typography.headlineSmall)
-                Text("V4 · shared AI", color = Color.LightGray, style = MaterialTheme.typography.labelMedium)
+                Text("AIVO", color = Color(0xFF61E6FF), style = MaterialTheme.typography.headlineMedium)
+                Text("One AI. Every Task.", color = Color.LightGray, style = MaterialTheme.typography.labelMedium)
             }
-            TextButton(onClick = {
-                tokenDraft = ""
-                showSettings = true
-            }) { Text("Settings") }
+            Row {
+                TextButton(onClick = viewModel::clearMessages) { Text("New chat") }
+                TextButton(onClick = {
+                    tokenDraft = ""
+                    showSettings = true
+                }) { Text("Settings") }
+            }
         }
+
+        AivoCore(busy = busy)
 
         Text(
             text = when {
                 busy -> "Thinking…"
                 !error.isNullOrBlank() -> error.orEmpty()
                 !hasToken -> "Add an identity access token in Settings to connect securely."
-                BuildConfig.API_BASE_URL.isBlank() -> "Set JARVIS_API_BASE_URL in local.properties."
+                BuildConfig.API_BASE_URL.isBlank() -> "Set AIVO_PROXY_URL in local.properties."
                 else -> "Ready · ${languageLabel(language)} · this conversation stays in memory only"
             },
             color = if (error.isNullOrBlank()) Color(0xFF9EDDEA) else MaterialTheme.colorScheme.error,
@@ -117,7 +128,7 @@ fun JarvisScreen(viewModel: ChatViewModel) {
                 value = input,
                 onValueChange = { input = it },
                 modifier = Modifier.weight(1f),
-                placeholder = { Text("Ask JARVIS…") },
+                placeholder = { Text("Ask AIVO…") },
                 shape = RoundedCornerShape(22.dp),
                 maxLines = 4,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
@@ -162,6 +173,38 @@ fun JarvisScreen(viewModel: ChatViewModel) {
                 tokenDraft = ""
             },
             onClose = { showSettings = false },
+        )
+    }
+}
+
+@Composable
+private fun AivoCore(busy: Boolean) {
+    val transition = rememberInfiniteTransition(label = "aivo-core")
+    val pulse by transition.animateFloat(
+        initialValue = 0.94f,
+        targetValue = 1.06f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = if (busy) 700 else 1800),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "aivo-pulse",
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(84.dp)
+                .scale(pulse)
+                .drawBehind {
+                    drawCircle(Color(0xFF61E6FF).copy(alpha = if (busy) 0.28f else 0.16f), size.minDimension)
+                    drawCircle(Color(0xFF173B52), size.minDimension * 0.72f)
+                    drawCircle(Color(0xFF61E6FF), size.minDimension * 0.18f)
+                },
         )
     }
 }
