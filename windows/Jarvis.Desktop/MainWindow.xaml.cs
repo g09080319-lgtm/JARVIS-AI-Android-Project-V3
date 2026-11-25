@@ -195,12 +195,23 @@ public partial class MainWindow : Window
 
     private void LanguageBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (!IsInitialized)
+        {
+            if (LanguageBox.SelectedItem is ComboBoxItem { Tag: string startupLanguage })
+            {
+                _language = startupLanguage;
+            }
+            return;
+        }
         if (LanguageBox.SelectedItem is ComboBoxItem { Tag: string language })
         {
             _language = language;
-            SelectedLanguageText.Text = LanguageBox.SelectedItem is ComboBoxItem item
-                ? item.Content?.ToString() ?? language
-                : language;
+            if (SelectedLanguageText is not null)
+            {
+                SelectedLanguageText.Text = LanguageBox.SelectedItem is ComboBoxItem item
+                    ? item.Content?.ToString() ?? language
+                    : language;
+            }
             if (_recognizer is not null) StopRecognition();
         }
     }
