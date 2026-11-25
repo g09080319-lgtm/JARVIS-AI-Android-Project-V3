@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Net.NetworkInformation;
 using System.Speech.Recognition;
 using System.Speech.Synthesis;
 using System.Windows;
@@ -16,6 +17,7 @@ public partial class MainWindow : Window
     private SpeechRecognitionEngine? _recognizer;
     private string _language = "en-US";
     private bool _busy;
+    private bool _connectionVerified;
 
     public MainWindow()
     {
@@ -25,7 +27,16 @@ public partial class MainWindow : Window
             ?? Environment.GetEnvironmentVariable("JARVIS_API_BASE_URL")
             ?? _settings.ReadEndpoint();
         TokenBox.Password = _settings.ReadToken() ?? "";
-        Closing += (_, _) => StopRecognition();
+        UpdateConnectionStatus();
+        NetworkStateText.Text = NetworkInterface.GetIsNetworkAvailable() ? "Online" : "Offline";
+        NetworkChange.NetworkAvailabilityChanged += NetworkAvailabilityChanged;
+        Closing += (_, _) =>
+        {
+            NetworkChange.NetworkAvailabilityChanged -= NetworkAvailabilityChanged;
+            StopRecognition();
+            _speaker.SpeakAsyncCancelAll();
+            _speaker.Dispose();
+        };
     }
 
     public ObservableCollection<ChatMessage> Messages => _messages;
@@ -44,11 +55,13 @@ public partial class MainWindow : Window
         try
         {
             SaveAccess();
-            StatusText.Text = "Endpoint and access token saved for this Windows user.";
+            _connectionVerified = false;
+            UpdateConnectionStatus();
+            SetCoreState("IDLE", "Connection settings saved; backend not tested.", "#52F29B");
         }
         catch (Exception exception)
         {
-            StatusText.Text = exception.Message;
+            SetError(exception.Message);
         }
     }
 
@@ -78,11 +91,11 @@ public partial class MainWindow : Window
             SaveAccess();
             accessToken = _settings.ReadToken() ?? "";
             if (accessToken.Length == 0)
-                throw new InvalidOperationException("Enter an identity access token, then choose Save access.");
+                throw new InvalidOperationException("Add a short-lived access token from your OIDC identity provider in Settings.");
         }
         catch (Exception exception)
         {
-            StatusText.Text = exception.Message;
+            SetError(exception.Message);
             return;
         }
 
@@ -90,7 +103,7 @@ public partial class MainWindow : Window
         _messages.Add(new ChatMessage("user", prompt));
         _busy = true;
         SendButton.IsEnabled = false;
-        StatusText.Text = "JARVIS is thinking…";
+        SetCoreState("THINKING", "Processing your request…", "#20DFFF");
         try
         {
             var reply = await _client.SendAsync(
@@ -100,14 +113,33 @@ public partial class MainWindow : Window
                 _messages.TakeLast(30).ToArray(),
                 CancellationToken.None);
             _messages.Add(new ChatMessage("assistant", reply));
-            StatusText.Text = "Ready · session-only conversation";
-            if (SpeakRepliesBox.IsChecked == true) _speaker.SpeakAsync(reply);
+            _connectionVerified = true;
+            UpdateConnectionStatus();
+            SetCoreState("IDLE", "Ready · session-only conversation", "#52F29B");
+            if (SpeakRepliesBox.IsChecked == true)
+            {
+                _speaker.SpeakCompleted -= Speaker_SpeakCompleted;
+                _speaker.SpeakCompleted += Speaker_SpeakCompleted;
+                _speaker.SpeakAsync(reply);
+                SetCoreState("SPEAKING", "Speaking · choose Stop voice to interrupt.", "#52F29B");
+                StopVoiceButton.IsEnabled = true;
+            }
             ConversationScroll.ScrollToEnd();
         }
         catch (Exception exception)
         {
             _messages.RemoveAt(_messages.Count - 1);
-            StatusText.Text = exception.Message;
+            var message = exception.Message;
+            if (message.Contains("expired", StringComparison.OrdinalIgnoreCase) ||
+                message.Contains("access token", StringComparison.OrdinalIgnoreCase))
+            {
+                BackendStateText.Text = "Auth required";
+            }
+            else
+            {
+                BackendStateText.Text = "Request failed";
+            }
+            SetError(message);
         }
         finally
         {
@@ -121,7 +153,7 @@ public partial class MainWindow : Window
         if (_recognizer is not null)
         {
             StopRecognition();
-            StatusText.Text = "Voice listening stopped.";
+            SetCoreState("IDLE", "Voice listening stopped.", "#52F29B");
             return;
         }
 
@@ -134,29 +166,43 @@ public partial class MainWindow : Window
             _recognizer = new SpeechRecognitionEngine(recognizerInfo);
             _recognizer.LoadGrammar(new DictationGrammar());
             _recognizer.SetInputToDefaultAudioDevice();
+            MicrophoneStateText.Text = "Ready";
             _recognizer.SpeechRecognized += (_, args) =>
             {
                 if (args.Result.Confidence < 0.65f) return;
                 Dispatcher.Invoke(() => {
                     if (_busy) return;
                     PromptBox.Text = args.Result.Text;
+                    SetCoreState("THINKING", "Voice captured · processing request…", "#20DFFF");
                     _ = SendPromptAsync();
                 });
             };
-            _recognizer.RecognizeCompleted += (_, _) => Dispatcher.Invoke(StopRecognition);
+            _recognizer.RecognizeCompleted += (_, _) => Dispatcher.Invoke(() =>
+            {
+                StopRecognition();
+                if (!_busy) SetCoreState("IDLE", "Ready to help you…", "#52F29B");
+            });
             _recognizer.RecognizeAsync(RecognizeMode.Multiple);
-            StatusText.Text = $"Listening in {culture.DisplayName}. Click Mic to stop.";
+            SetCoreState("LISTENING", $"Listening in {culture.DisplayName}. Click Mic to stop.", "#20DFFF");
         }
         catch (Exception exception)
         {
             StopRecognition();
-            StatusText.Text = exception.Message;
+            MicrophoneStateText.Text = "Unavailable";
+            SetError(exception.Message);
         }
     }
 
     private void LanguageBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (LanguageBox.SelectedItem is ComboBoxItem { Tag: string language }) _language = language;
+        if (LanguageBox.SelectedItem is ComboBoxItem { Tag: string language })
+        {
+            _language = language;
+            SelectedLanguageText.Text = LanguageBox.SelectedItem is ComboBoxItem item
+                ? item.Content?.ToString() ?? language
+                : language;
+            if (_recognizer is not null) StopRecognition();
+        }
     }
 
     private void StopRecognition()
@@ -165,5 +211,95 @@ public partial class MainWindow : Window
         try { _recognizer.RecognizeAsyncCancel(); } catch (InvalidOperationException) { }
         _recognizer.Dispose();
         _recognizer = null;
+        MicrophoneStateText.Text = "Ready";
+    }
+
+    private void Settings_Click(object sender, RoutedEventArgs e)
+    {
+        SettingsPanel.Visibility = SettingsPanel.Visibility == Visibility.Visible
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+    }
+
+    private void StopVoice_Click(object sender, RoutedEventArgs e)
+    {
+        StopRecognition();
+        _speaker.SpeakAsyncCancelAll();
+        StopVoiceButton.IsEnabled = false;
+        SetCoreState("IDLE", "Voice output stopped.", "#52F29B");
+    }
+
+    private void ChatShortcut_Click(object sender, RoutedEventArgs e)
+    {
+        PromptBox.Focus();
+        Keyboard.Focus(PromptBox);
+    }
+
+    private void AndroidFeature_Click(object sender, RoutedEventArgs e)
+    {
+        SetCoreState(
+            "IDLE",
+            "WhatsApp and call announcements are available in the Android app; Windows notification integration is not implemented.",
+            "#20DFFF");
+    }
+
+    private void Speaker_SpeakCompleted(object? sender, SpeakCompletedEventArgs e)
+    {
+        Dispatcher.Invoke(() =>
+        {
+            StopVoiceButton.IsEnabled = false;
+            if (!_busy) SetCoreState("IDLE", "Ready · session-only conversation", "#52F29B");
+        });
+    }
+
+    private void NetworkAvailabilityChanged(object? sender, NetworkAvailabilityEventArgs e)
+    {
+        Dispatcher.Invoke(() => NetworkStateText.Text = e.IsAvailable ? "Online" : "Offline");
+    }
+
+    private void UpdateConnectionStatus()
+    {
+        var endpoint = EndpointBox.Text.Trim();
+        var hasEndpoint = Uri.TryCreate(endpoint, UriKind.Absolute, out var uri) &&
+            uri.Scheme == Uri.UriSchemeHttps;
+        var hasToken = !string.IsNullOrWhiteSpace(_settings.ReadToken());
+        BackendStateText.Text = _connectionVerified
+            ? "Connected"
+            : !hasEndpoint ? "URL needed"
+            : !hasToken ? "Token needed"
+            : "Not checked";
+        if (_connectionVerified)
+        {
+            SetCoreState("IDLE", "Shared AI backend verified by the last successful response.", "#52F29B");
+        }
+        else if (!hasEndpoint)
+        {
+            StatusText.Text = "Set the deployed HTTPS Worker origin in Settings. No backend URL is configured.";
+        }
+        else if (!hasToken)
+        {
+            StatusText.Text = "Add a short-lived access token from your configured OIDC provider in Settings.";
+        }
+        else
+        {
+            StatusText.Text = "Backend configuration is present; connection is unverified until a request succeeds.";
+        }
+    }
+
+    private void SetError(string message)
+    {
+        StatusText.Text = message;
+        CoreStateText.Text = "ERROR";
+        CoreStateText.Foreground = new System.Windows.Media.SolidColorBrush(
+            (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#FFFF657A"));
+    }
+
+    private void SetCoreState(string state, string message, string color)
+    {
+        CoreStateText.Text = state;
+        CoreStateText.Foreground = new System.Windows.Media.SolidColorBrush(
+            (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(color));
+        CoreStatusText.Text = message;
+        StatusText.Text = message;
     }
 }

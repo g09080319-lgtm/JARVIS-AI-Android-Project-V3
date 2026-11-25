@@ -4,13 +4,13 @@ JARVIS AI V4 is being delivered in phases. The current milestone has Android and
 
 ## Implemented in this milestone
 
-- **Android:** Kotlin/Jetpack Compose chat, explicit tap-to-talk speech recognition, English/Urdu/Hindi language selection, spoken replies, in-memory conversation context, and Android Keystore encryption for the API access token.
+- **Android:** Kotlin/Jetpack Compose chat with a responsive midnight-blue/cyan dashboard, animated AI core, voice waveform, truthful status indicators, a pulsing circuit-line composer, explicit tap-to-talk speech recognition, English/Urdu/Hindi language selection, spoken replies, in-memory conversation context, and Android Keystore encryption for the API access token.
 - **Android notifications:** opt-in `NotificationListenerService` for WhatsApp and WhatsApp Business notifications; English/Urdu/Hindi announcements; message previews hidden by default; voice/call switches, quiet hours, Android-Keystore-encrypted muted sender names, duplicate suppression, and Android settings access guidance. The implementation uses only notification content Android exposes and does not access WhatsApp storage or call audio.
-- **Windows 10/11:** .NET 10 WPF chat client, Windows speech recognition and speech output, language selection, session-only conversation context, and per-user DPAPI encryption for the API access token.
+- **Windows 10/11:** Native .NET 10 WPF client sharing the dashboard visual identity, with animated holographic rings/circuit line, chat, Windows speech recognition and speech output, language selection, session-only conversation context, and per-user DPAPI encryption for the API access token.
 - **Shared API:** Cloudflare Worker `POST /v1/chat`, RS256/ES256 OIDC JWT verification, fail-closed per-user rate limiting, allowlisted browser origins, request-size/message limits, and Anthropic forwarding with a server-side secret.
 - **Build setup:** Android APK and AAB build tasks, a self-contained Windows publish, an Inno Setup installer definition, backend contract tests, and CI jobs for all three.
 
-The clients accept a short-lived access token from an external OIDC identity provider; interactive sign-in is not implemented yet. Conversations are kept in process memory only and are sent to the configured AI provider when the user submits a prompt. They are not stored by this Worker. Notification parsing and background announcements have automated parser coverage but have not been tested against WhatsApp notifications on a physical Android device.
+The clients accept a short-lived access token from an external OIDC identity provider; interactive sign-in is not implemented yet. Android can store a device-specific HTTPS Worker origin in Settings or use `JARVIS_PROXY_URL` from `local.properties`; Windows configures the same origin in Settings. Conversations are kept in process memory only and are sent to the configured AI provider when the user submits a prompt. They are not stored by this Worker. Notification parsing and background announcements have automated parser coverage but have not been tested against WhatsApp notifications on a physical Android device.
 
 ## Configure the shared backend
 
@@ -21,7 +21,7 @@ The Worker is source code only. This repository does not contain a deployed URL,
 3. Change the rate-limit `namespace_id` in `proxy/wrangler.jsonc` to a positive integer available in your Cloudflare account.
 4. From `proxy`, run `npx wrangler@latest login`, then `npx wrangler@latest deploy`.
 5. Add the provider key only as a Cloudflare secret: `npx wrangler@latest secret put ANTHROPIC_API_KEY --name jarvis-v4-api`.
-6. Configure `JARVIS_PROXY_URL` as the actual HTTPS Worker origin (without `/v1/chat`) in Android's ignored `local.properties`; set the same origin in the Windows app. For GitHub Actions, add repository secret `JARVIS_PROXY_URL` if you want the URL compiled into CI packages. It is an endpoint, not an API credential. Obtain a valid short-lived OIDC access token from your identity provider and enter it in each client.
+6. Configure `JARVIS_PROXY_URL` as the actual HTTPS Worker origin (without `/v1/chat`) in Android's ignored `local.properties`, or enter the origin in Android Settings; set the same origin in the Windows app. For GitHub Actions, add repository secret `JARVIS_PROXY_URL` if you want the URL compiled into CI packages. It is an endpoint, not an API credential. Obtain a valid short-lived OIDC access token from your identity provider and enter it in each client.
 
 Do not commit provider keys, access tokens, `.dev.vars`, local properties, or signing keys. The checked-in `wrangler.jsonc` values are configuration placeholders and are not live service details. No deployment or live provider call is claimed.
 
@@ -59,13 +59,14 @@ dotnet publish windows/Jarvis.Desktop/Jarvis.Desktop.csproj -c Release -r win-x6
 & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" windows\installer.iss
 ```
 
-GitHub Actions runs backend tests, Android unit tests/lint/APK/AAB builds, an Android 11 (API 30) Google APIs emulator smoke test, and the Windows publish/installer build. Android test reports are retained as an artifact; successful package builds upload `jarvis-ai-v4-android` and `jarvis-ai-v4-windows`.
+GitHub Actions runs backend tests, Android unit tests/lint/APK/AAB builds, an Android 11 (API 30) Google APIs emulator smoke test, and the Windows publish/installer build. Android test reports are retained as an artifact; successful package builds upload `jarvis-ai-v4-android` and `jarvis-ai-v4-windows`. The software-emulated hosted runner has previously crashed before instrumentation started; such a CI run is not evidence that the UI smoke test passed.
 
 ## Current feature status
 
 | Capability | Status | Scope and evidence |
 | --- | --- | --- |
 | Android Kotlin/Gradle foundation, SDK 36, Java 17, Debug APK, unit tests, and lint | **WORKING AND TESTED** | `:app:testDebugUnitTest`, `:app:lintDebug`, and `:app:assembleDebug` pass locally. |
+| Android/Windows neon JARVIS dashboard, animated AI core, waveform, status panel, responsive composer, and animated circuit line | **IMPLEMENTED BUT NOT TESTED** | Implemented in the native Compose and WPF clients. Android compiles locally; the WPF and on-device visual layout require the current branch's Windows CI and Android runtime validation. |
 | Android launch/settings/privacy-controls UI smoke test | **IMPLEMENTED BUT NOT TESTED** | Compose instrumentation test is wired to an Android 11 (API 30) Google APIs emulator in GitHub Actions; the API 36 software-emulated runner failed to attach the instrumentation process. |
 | Android release AAB packaging | **IMPLEMENTED BUT NOT TESTED** | A bundle was produced before the latest notification changes; release signing is still needed for Play distribution. |
 | `JARVIS_PROXY_URL` to BuildConfig and Actions secret wiring | **IMPLEMENTED BUT NOT TESTED** | URL only; it is not an API credential. No actual deployment URL is configured here. |
@@ -74,8 +75,8 @@ GitHub Actions runs backend tests, Android unit tests/lint/APK/AAB builds, an An
 | WhatsApp notification announcements, available sender parsing, Urdu/Hindi/English phrases, preview privacy, quiet hours, muted senders, deduplication | **IMPLEMENTED BUT NOT TESTED** | Parser and quiet-hour unit tests pass; listener and TTS require real-device testing with WhatsApp notifications. |
 | WhatsApp notification delivery with screen locked/backgrounded | **PLATFORM RESTRICTED** | Android/OEM process policy and WhatsApp notification settings determine delivery; this device behavior is not verified. |
 | Notification-access controls, and Android-Keystore encryption for access tokens and muted sender filters | **IMPLEMENTED BUT NOT TESTED** | Requires explicit user-granted notification access; Keystore behavior has not been tested on hardware. |
-| Windows 10/11 chat, voice, and installer | **IMPLEMENTED BUT NOT TESTED** | CI built the previous main revision; current branch needs its own Windows workflow run. |
-| Wake word, continuous/background microphone, configurable speech voice/rate/pitch, holographic orb, themes, persisted chat history | **NOT IMPLEMENTED** | The current voice UI is tap-to-talk and chat history is process-memory only. |
+| Windows 10/11 chat, voice, futuristic dashboard, and installer | **IMPLEMENTED BUT NOT TESTED** | The WPF source has matching cyan/navy dashboard styling; current-branch Windows CI and interactive visual verification are required. |
+| Wake word, continuous/background microphone, configurable speech voice/rate/pitch, themes, persisted chat history | **NOT IMPLEMENTED** | The current voice UI is tap-to-talk and chat history is process-memory only. |
 | Calls/SMS, app launching, alarms, reminders, flashlight/volume/settings controls, cleaner, device management | **NOT IMPLEMENTED** | No device-action code or confirmation flow is present yet. |
 | Web search, file understanding, document summaries, social account integrations, publishing/scheduling | **NOT IMPLEMENTED** | No authorized providers or APIs are connected. |
 | Video editing and AI content creation | **NOT IMPLEMENTED** | No processing or export pipeline is present. |

@@ -2,7 +2,7 @@ name: JARVIS AI V4
 
 on:
   push:
-    branches: [main, develop, "development/**", "feature/**", jarvis-v4-qa-fixes]
+    branches: [main, develop, "development/**", "feature/**", jarvis-v4-qa-fixes, jarvis-v4-futuristic-dashboard]
   pull_request:
     branches: [main, develop]
   workflow_dispatch:

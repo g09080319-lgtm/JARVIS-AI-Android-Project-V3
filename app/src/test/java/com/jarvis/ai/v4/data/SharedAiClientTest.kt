@@ -8,7 +8,8 @@ class SharedAiClientTest {
     @Test
     fun refusesNonHttpsBackendBeforeSendingCredentials() = runBlocking {
         val error = runCatching {
-            SharedAiClient("http://localhost:8787").chat(
+            SharedAiClient().chat(
+                baseUrl = "http://localhost:8787",
                 token = "test-token",
                 messages = listOf(ChatMessage("user", "hello")),
                 language = "en-US",

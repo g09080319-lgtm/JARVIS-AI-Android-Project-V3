@@ -5,6 +5,7 @@ import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -21,7 +22,10 @@ class JarvisScreenSmokeTest {
     @Test
     fun launchSettingsAndPrivacyControlsWork() {
         composeRule.onNodeWithText("J.A.R.V.I.S").assertIsDisplayed()
-        composeRule.onNodeWithText("Settings").performClick()
+        composeRule.onNodeWithText("SYSTEM STATUS").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Animated cyan holographic circuit line").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Start voice recognition").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Settings").performClick()
         composeRule.onNodeWithText("WhatsApp announcements").assertIsDisplayed()
 
         composeRule.onNodeWithTag("announcements-enabled").assertIsOff()

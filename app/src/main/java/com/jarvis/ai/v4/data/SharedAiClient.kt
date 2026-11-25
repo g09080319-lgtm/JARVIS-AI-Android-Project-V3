@@ -10,12 +10,17 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
-class SharedAiClient(private val baseUrl: String) {
+class SharedAiClient {
     private val http = OkHttpClient.Builder()
         .callTimeout(50, TimeUnit.SECONDS)
         .build()
 
-    suspend fun chat(token: String, messages: List<ChatMessage>, language: String): String =
+    suspend fun chat(
+        baseUrl: String,
+        token: String,
+        messages: List<ChatMessage>,
+        language: String,
+    ): String =
         withContext(Dispatchers.IO) {
             val normalizedBase = baseUrl.trim().trimEnd('/')
             require(normalizedBase.startsWith("https://", ignoreCase = true)) {
