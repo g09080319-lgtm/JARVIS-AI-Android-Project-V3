@@ -67,6 +67,16 @@ The Android and Worker source changes for backend configuration and Google authe
 - Rebuilt debug APK: `app/build/outputs/apk/debug/app-debug.apk`, **12,214,897 bytes**, SHA-256 `a6ab0afa56b7b54cece419e01a905c228e1f2fef00f91a100098b20fd0fbb979`. `apksigner verify` passed (v2 signature); package `com.jarvis.ai.v4`, version `4.0.0` / code `1`, min SDK 26, target SDK 36. This is a debug-signed APK, not a production release.
 - No local properties, Worker `.dev.vars`, `.env`, keystore properties, or repository keystore files were found; required backend/OAuth values were absent from the process environment. ADB found no attached device. Therefore physical-device Google Sign-In and chat against a deployed Worker were **not run**.
 - A non-mutating `git push --dry-run origin main` was denied: GitHub returned HTTP 403, `Permission to g09080319-lgtm/JARVIS-AI-Android-Project-V3.git denied to r92856065-prog`. No push was made; local commits and branches were preserved.
-- `README.md` now documents the SHA-1/SHA-256 fingerprint checks and local release-keystore setup. The current Actions workflow does not provision signing credentials, so no production-signed AAB is available.
+- At this checkpoint, `README.md` documented SHA-1/SHA-256 fingerprint checks and local signing; the then-current Actions workflow did not provision signing credentials. The follow-up below adds conditional protected CI signing support, but no production-signed AAB is available.
 
 **Gate result:** Phase 3 source and automated tests are verified, but production integration is **blocked**, not complete. Phase 4 was not started. The next required verification depends on real Google OAuth clients and matching signing fingerprints, deployed Worker configuration and secrets, an HTTPS backend URL, a connected Android device, and a production signing keystore.
+
+## Production readiness preparation — 2026-11-26
+
+- Added `docs/AIVO_V4_PRODUCTION_SETUP.md` with owner-operated GitHub Write-access steps, OAuth client/fingerprint setup, Cloudflare deployment/secrets/rate-limit setup, and protected release-environment configuration.
+- Added `docs/AIVO_V4_DEVICE_TEST_CHECKLIST.md`. All real-device items remain **not run** until a configured staging backend, OAuth clients, and an Android test device are available.
+- Updated GitHub Actions so routine CI runs Android tests, lint, and a debug APK build. A separate manually dispatched `main` release job expects the `android-release` environment, checks required secret/variable completeness, stages the keystore only in runner temporary storage, verifies APK identity and signing digest plus AAB signature, removes signing material, and uploads separate artifacts. No secrets or environment values have been configured; no signed release build has been run.
+- Parsed the workflow YAML and exercised absent, partial, and complete signing-configuration branches with dummy test values. These checks validate workflow logic only; no GitHub Actions run or real signature verification was performed for this workflow change.
+- GitHub CLI confirms the active account is `r92856065-prog`. The collaborator-permission API returned HTTP 403 (`Must have push access to view collaborator permission`); a prior non-mutating push dry-run was also denied. No push was retried or made. The repository owner must grant Write access as described in the setup document.
+
+Production authentication, deployed AI service, signed APK/AAB, and physical-device tests remain blocked. No Phase 4 implementation was started.

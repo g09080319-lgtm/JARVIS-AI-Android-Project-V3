@@ -33,7 +33,7 @@ Do not commit provider keys, access tokens, `.dev.vars`, local properties, or si
 
 Keep the release keystore in a secure backup location outside the repository. Do not regenerate or replace it for an app update: Android updates must retain the signing identity expected by existing installs. Create an ignored, machine-local `keystore.properties` from `keystore.properties.example` and set `storeFile`, `storePassword`, `keyAlias`, and `keyPassword`; restrict access to that file and the keystore. The Gradle release build reads these values locally and signs `bundleRelease` only when both the properties file and its referenced keystore are present. Never commit either file.
 
-The current GitHub Actions workflow does not provision signing secrets or a keystore, so its release AAB is unsigned and is not ready for Google Play. Do not upload that artifact as a production release. To enable CI signing later, deliberately add a protected GitHub Environment and a reviewed workflow step that reconstructs the keystore from encrypted secrets on the ephemeral runner, creates the ignored properties file, verifies the signed output, and removes temporary material. Do not put secret values in workflow YAML, build logs, artifacts, Android resources, or repository variables.
+GitHub Actions now has a separate `android-release` job that runs only when manually dispatched from `main`. Configure the protected GitHub Environment and its variables/secrets as described in [AIVO V4 production setup](docs/AIVO_V4_PRODUCTION_SETUP.md). With no signing secrets, the job explicitly skips release packaging; partial configuration fails. With complete configuration, the job restores the key only to runner temporary storage, builds APK and AAB separately, checks APK package/version and the expected signing fingerprint, verifies the AAB signature, removes temporary signing material, and uploads separate artifacts. No GitHub signing secrets or production configuration are currently set up, so no production-signed artifact is available yet. Do not put secret values in workflow YAML, build logs, artifacts, Android resources, or repository variables.
 
 ## Build and test
 
@@ -54,7 +54,9 @@ dotnet publish windows/Jarvis.Desktop/Jarvis.Desktop.csproj -c Release -r win-x6
 & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" windows\installer.iss
 ```
 
-GitHub Actions runs the backend tests, Android unit tests/APK/AAB builds, and Windows publish/installer build. Successful runs upload `jarvis-ai-v4-android` and `jarvis-ai-v4-windows` artifacts.
+GitHub Actions runs the backend tests, Android unit tests/lint/debug APK build, and Windows publish/installer build. The debug APK is uploaded as `aivo-v4-android-debug`. Release APK and AAB artifacts are separate and only exist after the protected release environment is configured. Windows builds upload `jarvis-ai-v4-windows`.
+
+Use the [real-device checklist](docs/AIVO_V4_DEVICE_TEST_CHECKLIST.md) before claiming production authentication, chat, voice, or background behavior has been verified.
 
 ## Not implemented yet
 
