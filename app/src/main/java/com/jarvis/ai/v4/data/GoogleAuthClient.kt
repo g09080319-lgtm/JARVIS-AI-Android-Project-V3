@@ -4,6 +4,7 @@ import android.app.Activity
 import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
+import androidx.credentials.exceptions.NoCredentialException
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 
@@ -19,7 +20,14 @@ class GoogleAuthClient(private val activity: Activity) {
         val request = GetCredentialRequest.Builder()
             .addCredentialOption(option)
             .build()
-        val result = CredentialManager.create(activity).getCredential(activity, request)
+        val result = try {
+            CredentialManager.create(activity).getCredential(activity, request)
+        } catch (exception: NoCredentialException) {
+            throw IllegalStateException(
+                "No Google account is available. Add an account to this device and try again.",
+                exception,
+            )
+        }
         val credential = result.credential
         if (credential !is CustomCredential ||
             credential.type != GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL

@@ -10,6 +10,7 @@ import com.jarvis.ai.v4.data.ChatMessage
 import com.jarvis.ai.v4.data.GoogleAuthClient
 import com.jarvis.ai.v4.data.SharedAiClient
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -35,6 +36,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     private var textToSpeech: TextToSpeech? = null
     private var ttsReady = false
+    private var requestJob: Job? = null
 
     init {
         textToSpeech = TextToSpeech(application) { status ->
@@ -78,6 +80,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun signOut() {
+        requestJob?.cancel()
+        requestJob = null
         accessToken = null
         accessTokenStore.clear()
         _hasAccessToken.value = false
@@ -92,9 +96,17 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun clearMessages() {
-        if (_busy.value) return
+        requestJob?.cancel()
+        requestJob = null
         _messages.value = emptyList()
         _error.value = null
+        stopSpeaking()
+    }
+
+    fun stopResponse() {
+        requestJob?.cancel()
+        requestJob = null
+        stopSpeaking()
     }
 
     fun stopSpeaking() {
@@ -122,7 +134,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _messages.value = next
         _busy.value = true
         _error.value = null
-        viewModelScope.launch {
+        requestJob = viewModelScope.launch {
             try {
                 val reply = client.chat(token, next.takeLast(30), _language.value)
                 _messages.value = _messages.value + ChatMessage(role = "assistant", content = reply)
@@ -130,16 +142,20 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     textToSpeech?.language = Locale.forLanguageTag(_language.value)
                     textToSpeech?.speak(reply, TextToSpeech.QUEUE_FLUSH, null, "aivo-reply")
                 }
+            } catch (exception: CancellationException) {
+                throw exception
             } catch (exception: Exception) {
                 _messages.value = _messages.value.dropLast(1)
                 _error.value = exception.message ?: "The shared AI service could not be reached."
             } finally {
                 _busy.value = false
+                requestJob = null
             }
         }
     }
 
     override fun onCleared() {
+        requestJob?.cancel()
         textToSpeech?.stop()
         textToSpeech?.shutdown()
         textToSpeech = null

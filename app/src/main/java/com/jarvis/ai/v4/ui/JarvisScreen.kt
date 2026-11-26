@@ -59,6 +59,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -66,6 +67,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.jarvis.ai.v4.BuildConfig
 import com.jarvis.ai.v4.ChatViewModel
+import com.jarvis.ai.v4.R
 import com.jarvis.ai.v4.data.ChatMessage
 
 @Composable
@@ -90,8 +92,8 @@ fun JarvisScreen(viewModel: ChatViewModel) {
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.weight(1f)) {
-                Text("AIVO", color = Color(0xFF61E6FF), style = MaterialTheme.typography.headlineMedium)
-                Text("One AI. Every Task.", color = Color.LightGray, style = MaterialTheme.typography.labelMedium)
+                Text(stringResource(R.string.app_name), color = Color(0xFF61E6FF), style = MaterialTheme.typography.headlineMedium)
+                Text(stringResource(R.string.aivo_tagline), color = Color.LightGray, style = MaterialTheme.typography.labelMedium)
             }
             Row {
                 TextButton(onClick = viewModel::clearMessages) { Text("New chat") }
@@ -153,12 +155,16 @@ fun JarvisScreen(viewModel: ChatViewModel) {
                 onError = viewModel::reportError,
             )
             Button(
-                enabled = !busy && input.isNotBlank(),
+                enabled = busy || input.isNotBlank(),
                 onClick = {
-                    viewModel.send(input)
-                    input = ""
+                    if (busy) {
+                        viewModel.stopResponse()
+                    } else {
+                        viewModel.send(input)
+                        input = ""
+                    }
                 },
-            ) { Text("Send") }
+            ) { Text(if (busy) "Stop" else "Send") }
         }
     }
 
@@ -282,6 +288,10 @@ private fun AccessSettingsDialog(
                     singleLine = true,
                 )
                 Text("Voice language")
+                Text(
+                    "Wake word ${stringResource(R.string.aivo_wake_word)} is not enabled yet. Voice input currently starts when you tap Mic.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     listOf("en-US" to "English", "ur-PK" to "اردو", "hi-IN" to "हिन्दी").forEach { (tag, label) ->
                         FilterChip(
