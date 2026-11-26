@@ -4,6 +4,10 @@ import worker from "./worker.js";
 
 const issuer = "https://identity.example.test/";
 const audience = "jarvis-v4";
+const googleIssuer = "https://accounts.google.com";
+const googleClientId = "aivo-client-id.apps.googleusercontent.com";
+const googleAndroidClientId = "aivo-android-client-id.apps.googleusercontent.com";
+const sessionSecret = "a".repeat(48);
 const keys = await crypto.subtle.generateKey(
   {
     name: "RSASSA-PKCS1-v1_5",
@@ -45,6 +49,30 @@ async function token(overrides = {}, headerOverrides = {}) {
   return `${content}.${base64Url(new Uint8Array(signature))}`;
 }
 
+async function sessionToken(overrides = {}) {
+  const header = base64Url(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+  const now = Math.floor(Date.now() / 1000);
+  const claims = base64Url(JSON.stringify({
+    iss: "https://aivo.invalid/session",
+    aud: "aivo-api",
+    sub: "google-user-7",
+    token_use: "access",
+    iat: now,
+    exp: now + 900,
+    ...overrides,
+  }));
+  const content = `${header}.${claims}`;
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(sessionSecret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(content));
+  return `${content}.${base64Url(new Uint8Array(signature))}`;
+}
+
 function env(extra = {}) {
   return {
     OIDC_ISSUER: issuer,
@@ -63,6 +91,7 @@ function installFetch(t, anthropicResponse = Response.json({ content: [{ type: "
     const url = String(input);
     calls.push({ url, init });
     if (url === "https://identity.example.test/keys") return Response.json({ keys: [publicJwk] });
+    if (url === "https://www.googleapis.com/oauth2/v3/certs") return Response.json({ keys: [publicJwk] });
     if (url === "https://api.anthropic.com/v1/messages") return anthropicResponse;
     throw new Error(`Unexpected fetch: ${url}`);
   };
@@ -182,5 +211,131 @@ test("chat rejects oversized declared bodies before parsing or calling the provi
   }), env());
 
   assert.equal(response.status, 413);
+  assert.equal(calls.some((call) => call.url.includes("anthropic.com")), false);
+});
+
+test("Google authentication fails closed until OAuth and session secrets are configured", async (t) => {
+  const calls = installFetch(t);
+  const response = await worker.fetch(new Request("https://aivo.test/v1/auth/google", {
+    method: "POST",
+    body: JSON.stringify({ idToken: "not-a-real-token" }),
+  }), env());
+
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), { error: "auth_not_configured" });
+  assert.equal(calls.some((call) => call.url.includes("googleapis.com")), false);
+});
+
+test("Google ID tokens exchange for a short-lived session accepted by chat", async (t) => {
+  const calls = installFetch(t);
+  const idToken = await token({
+    iss: googleIssuer,
+    aud: googleClientId,
+    azp: googleAndroidClientId,
+    sub: "google-user-7",
+    email: "person@example.test",
+    email_verified: true,
+  });
+  const configured = env({
+    GOOGLE_CLIENT_ID: googleClientId,
+    GOOGLE_ANDROID_CLIENT_ID: googleAndroidClientId,
+    SESSION_SIGNING_SECRET: sessionSecret,
+  });
+  const authResponse = await worker.fetch(new Request("https://aivo.test/v1/auth/google", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ idToken }),
+  }), configured);
+
+  assert.equal(authResponse.status, 200);
+  const session = await authResponse.json();
+  assert.equal(session.token_type, "Bearer");
+  assert.equal(session.expires_in, 900);
+  assert.equal(typeof session.access_token, "string");
+
+  const chatResponse = await worker.fetch(new Request("https://aivo.test/v1/chat", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${session.access_token}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ messages: [{ role: "user", content: "Hello" }] }),
+  }), configured);
+  assert.equal(chatResponse.status, 200);
+  assert.deepEqual(await chatResponse.json(), { reply: "Hello" });
+  const parts = session.access_token.split(".");
+  const signature = parts[2];
+  const tampered = `${parts[0]}.${parts[1]}.${signature[0] === "a" ? "b" : "a"}${signature.slice(1)}`;
+  const rejectedSession = await worker.fetch(new Request("https://aivo.test/v1/chat", {
+    method: "POST",
+    headers: { authorization: `Bearer ${tampered}` },
+    body: JSON.stringify({ messages: [{ role: "user", content: "Hello" }] }),
+  }), configured);
+  assert.equal(rejectedSession.status, 401);
+  assert.equal(calls.filter((call) => call.url === "https://www.googleapis.com/oauth2/v3/certs").length, 1);
+  assert.equal(calls.some((call) => call.url === "https://api.anthropic.com/v1/messages"), true);
+});
+
+test("Google authentication rejects wrong audience, issuer, and unverified email", async (t) => {
+  installFetch(t);
+  const configured = env({
+    GOOGLE_CLIENT_ID: googleClientId,
+    SESSION_SIGNING_SECRET: sessionSecret,
+  });
+  const requests = [
+    await token({ iss: googleIssuer, aud: "another-client", email_verified: true }),
+    await token({ iss: "https://attacker.example", aud: googleClientId, email_verified: true }),
+    await token({ iss: googleIssuer, aud: googleClientId, email_verified: false }),
+    await token({ iss: googleIssuer, aud: [googleClientId, "another-client"], email_verified: true }),
+    await token({
+      iss: googleIssuer,
+      aud: googleClientId,
+      azp: "another-client",
+      email_verified: true,
+    }),
+  ];
+
+  for (const idToken of requests) {
+    const response = await worker.fetch(new Request("https://aivo.test/v1/auth/google", {
+      method: "POST",
+      body: JSON.stringify({ idToken }),
+    }), configured);
+    assert.equal(response.status, 401);
+    assert.deepEqual(await response.json(), { error: "invalid_google_token" });
+  }
+});
+
+test("Google session refresh requires a new valid Google ID token", async (t) => {
+  installFetch(t);
+  const idToken = await token({
+    iss: googleIssuer,
+    aud: googleClientId,
+    email_verified: true,
+  });
+  const response = await worker.fetch(new Request("https://aivo.test/v1/auth/refresh", {
+    method: "POST",
+    body: JSON.stringify({ idToken }),
+  }), env({
+    GOOGLE_CLIENT_ID: googleClientId,
+    SESSION_SIGNING_SECRET: sessionSecret,
+  }));
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).expires_in, 900);
+});
+
+test("chat rejects expired or invalidly scoped signed sessions", async (t) => {
+  const calls = installFetch(t);
+  const configured = env({ SESSION_SIGNING_SECRET: sessionSecret });
+  const expired = await sessionToken({ exp: Math.floor(Date.now() / 1000) - 1 });
+  const wrongAudience = await sessionToken({ aud: "another-api" });
+
+  for (const accessToken of [expired, wrongAudience]) {
+    const response = await worker.fetch(new Request("https://aivo.test/v1/chat", {
+      method: "POST",
+      headers: { authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({ messages: [{ role: "user", content: "Hello" }] }),
+    }), configured);
+    assert.equal(response.status, 401);
+  }
   assert.equal(calls.some((call) => call.url.includes("anthropic.com")), false);
 });

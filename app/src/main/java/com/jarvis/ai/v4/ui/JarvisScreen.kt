@@ -1,6 +1,9 @@
 package com.jarvis.ai.v4.ui
 
 import android.Manifest
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
@@ -72,6 +75,8 @@ fun JarvisScreen(viewModel: ChatViewModel) {
     val error by viewModel.error.collectAsStateWithLifecycle()
     val language by viewModel.language.collectAsStateWithLifecycle()
     val hasToken by viewModel.hasAccessToken.collectAsStateWithLifecycle()
+    val authenticating by viewModel.authenticating.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     var input by remember { mutableStateOf("") }
     var showSettings by remember { mutableStateOf(false) }
     var tokenDraft by remember { mutableStateOf("") }
@@ -103,8 +108,8 @@ fun JarvisScreen(viewModel: ChatViewModel) {
             text = when {
                 busy -> "Thinking…"
                 !error.isNullOrBlank() -> error.orEmpty()
-                !hasToken -> "Add an identity access token in Settings to connect securely."
                 BuildConfig.API_BASE_URL.isBlank() -> "Set AIVO_PROXY_URL in local.properties."
+                !hasToken -> "Sign in from Settings to connect securely."
                 else -> "Ready · ${languageLabel(language)} · this conversation stays in memory only"
             },
             color = if (error.isNullOrBlank()) Color(0xFF9EDDEA) else MaterialTheme.colorScheme.error,
@@ -145,7 +150,7 @@ fun JarvisScreen(viewModel: ChatViewModel) {
                     viewModel.send(transcript)
                     input = ""
                 },
-                onError = viewModel::reportVoiceError,
+                onError = viewModel::reportError,
             )
             Button(
                 enabled = !busy && input.isNotBlank(),
@@ -164,13 +169,20 @@ fun JarvisScreen(viewModel: ChatViewModel) {
             hasToken = hasToken,
             language = language,
             onLanguage = viewModel::setLanguage,
+            googleConfigured = BuildConfig.GOOGLE_WEB_CLIENT_ID.isNotBlank(),
+            authenticating = authenticating,
+            onGoogleSignIn = {
+                val activity = context.findActivity()
+                if (activity == null) {
+                    viewModel.reportError("Google Sign-In could not open from this screen.")
+                } else {
+                    viewModel.signInWithGoogle(activity)
+                }
+            },
+            onSignOut = viewModel::signOut,
             onSave = {
                 if (tokenDraft.isNotBlank() || !hasToken) viewModel.setAccessToken(tokenDraft)
                 showSettings = false
-            },
-            onClear = {
-                viewModel.setAccessToken("")
-                tokenDraft = ""
             },
             onClose = { showSettings = false },
         )
@@ -235,8 +247,11 @@ private fun AccessSettingsDialog(
     hasToken: Boolean,
     language: String,
     onLanguage: (String) -> Unit,
+    googleConfigured: Boolean,
+    authenticating: Boolean,
+    onGoogleSignIn: () -> Unit,
+    onSignOut: () -> Unit,
     onSave: () -> Unit,
-    onClear: () -> Unit,
     onClose: () -> Unit,
 ) {
     AlertDialog(
@@ -245,7 +260,19 @@ private fun AccessSettingsDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Backend: ${BuildConfig.API_BASE_URL.ifBlank { "not configured" }}")
-                Text("Paste a short-lived access token from your configured identity provider. The app encrypts it with Android Keystore; it is not an Anthropic API key.")
+                if (googleConfigured) {
+                    Button(onClick = onGoogleSignIn, enabled = !authenticating) {
+                        if (authenticating) CircularProgressIndicator(modifier = Modifier.size(18.dp))
+                        else Text(if (hasToken) "Refresh Google session" else "Continue with Google")
+                    }
+                } else {
+                    Text("Google Sign-In is unavailable until this build is configured with a real GOOGLE_WEB_CLIENT_ID.")
+                }
+                if (hasToken) {
+                    Text("Signing out clears this device's session. A previously issued backend session expires within 15 minutes.")
+                    TextButton(onClick = onSignOut) { Text("Sign out") }
+                }
+                Text("Advanced: an access token from the configured OIDC provider is stored encrypted with Android Keystore.")
                 OutlinedTextField(
                     value = tokenDraft,
                     onValueChange = onTokenChanged,
@@ -269,10 +296,7 @@ private fun AccessSettingsDialog(
         },
         confirmButton = { TextButton(onClick = onSave) { Text("Save") } },
         dismissButton = {
-            Row {
-                if (hasToken) TextButton(onClick = onClear) { Text("Clear token") }
-                TextButton(onClick = onClose) { Text("Close") }
-            }
+            TextButton(onClick = onClose) { Text("Close") }
         },
     )
 }
@@ -358,4 +382,10 @@ private fun languageLabel(language: String) = when (language) {
     "ur-PK" -> "Urdu"
     "hi-IN" -> "Hindi"
     else -> "English"
+}
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }

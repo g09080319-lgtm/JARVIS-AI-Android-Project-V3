@@ -2,3 +2,6 @@
 # Canonical production/development endpoint (without a path).
 AIVO_PROXY_URL=
 # Legacy fallbacks remain supported: JARVIS_PROXY_URL, JARVIS_API_BASE_URL.
+# Google OAuth web client ID used as the Credential Manager server client ID.
+# Configure the matching Android OAuth client with this app ID and signing certificate fingerprints.
+GOOGLE_WEB_CLIENT_ID=

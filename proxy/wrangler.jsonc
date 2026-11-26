@@ -7,6 +7,8 @@
     "OIDC_ISSUER": "https://YOUR_IDENTITY_PROVIDER/",
     "OIDC_JWKS_URL": "https://YOUR_IDENTITY_PROVIDER/.well-known/jwks.json",
     "OIDC_AUDIENCE": "YOUR_JARVIS_API_AUDIENCE",
+    "GOOGLE_CLIENT_ID": "",
+    "GOOGLE_ANDROID_CLIENT_ID": "",
     "ALLOWED_ORIGINS": "",
     "ANTHROPIC_MODEL": "claude-sonnet-4-5-20250929"
   },

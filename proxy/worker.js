@@ -24,6 +24,12 @@ function base64UrlBytes(value) {
   return Uint8Array.from(binary, (char) => char.charCodeAt(0));
 }
 
+function base64Url(value) {
+  let binary = "";
+  for (const byte of value) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+}
+
 function decodeJsonPart(value) {
   return JSON.parse(new TextDecoder().decode(base64UrlBytes(value)));
 }
@@ -43,11 +49,11 @@ async function loadJwks(url, forceRefresh = false) {
   return body.keys;
 }
 
-function validateClaims(claims, env) {
+function validateClaims(claims, { issuers, audience }) {
   const now = Math.floor(Date.now() / 1000);
   const audiences = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
-  if (claims.iss !== env.OIDC_ISSUER) return false;
-  if (!audiences.includes(env.OIDC_AUDIENCE)) return false;
+  if (!issuers.includes(claims.iss)) return false;
+  if (!audiences.includes(audience)) return false;
   if (typeof claims.sub !== "string" || claims.sub.length === 0 || claims.sub.length > 256) return false;
   if (!Number.isFinite(claims.exp) || claims.exp <= now) return false;
   if (claims.nbf !== undefined && (!Number.isFinite(claims.nbf) || claims.nbf > now + 60)) return false;
@@ -55,29 +61,24 @@ function validateClaims(claims, env) {
   return true;
 }
 
-async function verifyAccessToken(request, env) {
-  if (!env.OIDC_ISSUER || !env.OIDC_AUDIENCE || !env.OIDC_JWKS_URL) return null;
-
+async function verifySignedToken(token, { issuers, audience, jwksUrl: jwksEndpoint, allowedAlgorithms }) {
   let jwksUrl;
   try {
-    jwksUrl = new URL(env.OIDC_JWKS_URL);
+    jwksUrl = new URL(jwksEndpoint);
     if (jwksUrl.protocol !== "https:") return null;
   } catch {
     return null;
   }
 
-  const authorization = request.headers.get("authorization") || "";
-  const match = /^Bearer ([A-Za-z0-9._~-]+)$/.exec(authorization);
-  if (!match || match[1].length > 16_384) return null;
-
-  const parts = match[1].split(".");
+  if (typeof token !== "string" || token.length > 16_384) return null;
+  const parts = token.split(".");
   if (parts.length !== 3) return null;
 
   try {
     const header = decodeJsonPart(parts[0]);
     const claims = decodeJsonPart(parts[1]);
-    if (!["RS256", "ES256"].includes(header.alg) || typeof header.kid !== "string") return null;
-    if (!validateClaims(claims, env)) return null;
+    if (!allowedAlgorithms.includes(header.alg) || typeof header.kid !== "string") return null;
+    if (!validateClaims(claims, { issuers, audience })) return null;
 
     let keys = await loadJwks(jwksUrl.href);
     const matchesAlgorithm = (key) =>
@@ -110,10 +111,149 @@ async function verifyAccessToken(request, env) {
       ? "RSASSA-PKCS1-v1_5"
       : { name: "ECDSA", hash: "SHA-256" };
     if (!await crypto.subtle.verify(verifyAlgorithm, key, signature, signedContent)) return null;
-    return { subject: claims.sub };
+    return claims;
   } catch {
     return null;
   }
+}
+
+function bearerToken(request) {
+  const authorization = request.headers.get("authorization") || "";
+  const match = /^Bearer ([A-Za-z0-9._~-]+)$/.exec(authorization);
+  return match && match[1].length <= 16_384 ? match[1] : null;
+}
+
+function sessionSecret(env) {
+  const secret = env.SESSION_SIGNING_SECRET;
+  return typeof secret === "string" && secret.length >= 32 ? secret : null;
+}
+
+async function issueSessionToken(subject, env) {
+  const secret = sessionSecret(env);
+  if (!secret) return null;
+  const now = Math.floor(Date.now() / 1000);
+  const header = base64Url(utf8.encode(JSON.stringify({ alg: "HS256", typ: "JWT" })));
+  const payload = base64Url(utf8.encode(JSON.stringify({
+    iss: "https://aivo.invalid/session",
+    aud: "aivo-api",
+    sub: subject,
+    token_use: "access",
+    iat: now,
+    exp: now + 900,
+  })));
+  const content = `${header}.${payload}`;
+  const key = await crypto.subtle.importKey(
+    "raw",
+    utf8.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = await crypto.subtle.sign("HMAC", key, utf8.encode(content));
+  return `${content}.${base64Url(new Uint8Array(signature))}`;
+}
+
+async function verifySessionToken(token, env) {
+  const secret = sessionSecret(env);
+  if (!secret || typeof token !== "string" || token.length > 16_384) return null;
+  const parts = token.split(".");
+  if (parts.length !== 3) return null;
+  try {
+    const header = decodeJsonPart(parts[0]);
+    const claims = decodeJsonPart(parts[1]);
+    if (header.alg !== "HS256" || header.typ !== "JWT") return null;
+    if (!validateClaims(claims, {
+      issuers: ["https://aivo.invalid/session"],
+      audience: "aivo-api",
+    }) || claims.token_use !== "access") return null;
+    const key = await crypto.subtle.importKey(
+      "raw",
+      utf8.encode(secret),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["verify"],
+    );
+    const valid = await crypto.subtle.verify(
+      "HMAC",
+      key,
+      base64UrlBytes(parts[2]),
+      utf8.encode(`${parts[0]}.${parts[1]}`),
+    );
+    return valid ? { subject: claims.sub } : null;
+  } catch {
+    return null;
+  }
+}
+
+async function verifyGoogleIdToken(token, env) {
+  const clientId = env.GOOGLE_CLIENT_ID?.trim();
+  if (!clientId) return null;
+  const claims = await verifySignedToken(token, {
+    issuers: ["https://accounts.google.com", "accounts.google.com"],
+    audience: clientId,
+    jwksUrl: "https://www.googleapis.com/oauth2/v3/certs",
+    allowedAlgorithms: ["RS256"],
+  });
+  if (!claims || claims.email_verified !== true) return null;
+  const authorizedParties = new Set([
+    clientId,
+    ...(env.GOOGLE_ANDROID_CLIENT_ID?.trim() ? [env.GOOGLE_ANDROID_CLIENT_ID.trim()] : []),
+  ]);
+  if (claims.azp !== undefined && !authorizedParties.has(claims.azp)) return null;
+  const audiences = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
+  if (audiences.length > 1 && (typeof claims.azp !== "string" || !authorizedParties.has(claims.azp))) return null;
+  return { subject: claims.sub };
+}
+
+async function verifyAccessToken(request, env) {
+  const token = bearerToken(request);
+  if (!token) return null;
+
+  const session = await verifySessionToken(token, env);
+  if (session) return session;
+
+  if (!env.OIDC_ISSUER || !env.OIDC_AUDIENCE || !env.OIDC_JWKS_URL) return null;
+  const claims = await verifySignedToken(token, {
+    issuers: [env.OIDC_ISSUER],
+    audience: env.OIDC_AUDIENCE,
+    jwksUrl: env.OIDC_JWKS_URL,
+    allowedAlgorithms: ["RS256", "ES256"],
+  });
+  return claims ? { subject: claims.sub } : null;
+}
+
+async function authenticateGoogle(request, env) {
+  if (!env.GOOGLE_CLIENT_ID?.trim() || !sessionSecret(env) || !env.RATE_LIMITER?.limit) {
+    return json({ error: "auth_not_configured" }, 503);
+  }
+
+  let body;
+  try {
+    const text = await readBoundedBody(request);
+    body = JSON.parse(text);
+  } catch (error) {
+    return json({ error: error instanceof RangeError ? "request_too_large" : "invalid_json" },
+      error instanceof RangeError ? 413 : 400);
+  }
+  if (typeof body?.idToken !== "string" || body.idToken.length === 0 || body.idToken.length > 16_384) {
+    return json({ error: "google_id_token_required" }, 400);
+  }
+
+  const ip = request.headers.get("cf-connecting-ip") || "unknown";
+  try {
+    const digest = await crypto.subtle.digest("SHA-256", utf8.encode(`google-auth:${ip}`));
+    const key = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+    const result = await env.RATE_LIMITER.limit({ key });
+    if (!result?.success) return json({ error: "rate_limited" }, 429);
+  } catch {
+    return json({ error: "service_not_configured" }, 503);
+  }
+
+  const principal = await verifyGoogleIdToken(body.idToken, env);
+  if (!principal) return json({ error: "invalid_google_token" }, 401);
+  const accessToken = await issueSessionToken(principal.subject, env);
+  if (!accessToken) return json({ error: "auth_not_configured" }, 503);
+  return json({ access_token: accessToken, token_type: "Bearer", expires_in: 900 });
 }
 
 function corsHeaders(request, env) {
@@ -131,6 +271,14 @@ function corsHeaders(request, env) {
     "access-control-max-age": "600",
     vary: "Origin",
   };
+}
+
+function withCors(response, cors) {
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: { ...Object.fromEntries(response.headers), ...cors },
+  });
 }
 
 function validateMessages(value) {
@@ -188,6 +336,9 @@ export default {
     const url = new URL(request.url);
     if (request.method === "GET" && url.pathname === "/health") {
       return json({ status: "ok" }, 200, cors);
+    }
+    if (request.method === "POST" && ["/v1/auth/google", "/v1/auth/refresh"].includes(url.pathname)) {
+      return withCors(await authenticateGoogle(request, env), cors);
     }
     if (request.method !== "POST" || url.pathname !== "/v1/chat") {
       return json({ error: "not_found" }, 404, cors);

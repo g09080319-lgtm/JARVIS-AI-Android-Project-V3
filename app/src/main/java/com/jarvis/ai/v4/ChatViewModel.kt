@@ -1,12 +1,15 @@
 package com.jarvis.ai.v4
 
 import android.app.Application
+import android.app.Activity
 import android.speech.tts.TextToSpeech
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.jarvis.ai.v4.data.AccessTokenStore
 import com.jarvis.ai.v4.data.ChatMessage
+import com.jarvis.ai.v4.data.GoogleAuthClient
 import com.jarvis.ai.v4.data.SharedAiClient
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -27,6 +30,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     val language: StateFlow<String> = _language.asStateFlow()
     private val _hasAccessToken = MutableStateFlow(!accessToken.isNullOrBlank())
     val hasAccessToken: StateFlow<Boolean> = _hasAccessToken.asStateFlow()
+    private val _authenticating = MutableStateFlow(false)
+    val authenticating: StateFlow<Boolean> = _authenticating.asStateFlow()
 
     private var textToSpeech: TextToSpeech? = null
     private var ttsReady = false
@@ -47,6 +52,40 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _error.value = null
     }
 
+    fun signInWithGoogle(activity: Activity) {
+        if (BuildConfig.GOOGLE_WEB_CLIENT_ID.isBlank()) {
+            _error.value = "Google Sign-In is not configured for this build. Add GOOGLE_WEB_CLIENT_ID."
+            return
+        }
+        if (_authenticating.value || _busy.value) return
+
+        _authenticating.value = true
+        _error.value = null
+        viewModelScope.launch {
+            try {
+                val googleIdToken = GoogleAuthClient(activity)
+                    .getIdToken(BuildConfig.GOOGLE_WEB_CLIENT_ID)
+                val session = client.authenticateWithGoogle(googleIdToken, refresh = accessToken != null)
+                setAccessToken(session.accessToken)
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (exception: Exception) {
+                _error.value = exception.message ?: "Google Sign-In could not be completed."
+            } finally {
+                _authenticating.value = false
+            }
+        }
+    }
+
+    fun signOut() {
+        accessToken = null
+        accessTokenStore.clear()
+        _hasAccessToken.value = false
+        _messages.value = emptyList()
+        _error.value = null
+        stopSpeaking()
+    }
+
     fun setLanguage(value: String) {
         _language.value = value
         if (ttsReady) textToSpeech?.language = Locale.forLanguageTag(value)
@@ -62,7 +101,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         textToSpeech?.stop()
     }
 
-    fun reportVoiceError(message: String) {
+    fun reportError(message: String) {
         _error.value = message
     }
 

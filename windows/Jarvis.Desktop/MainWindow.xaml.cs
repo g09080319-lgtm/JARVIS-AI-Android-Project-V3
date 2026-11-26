@@ -21,7 +21,10 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         DataContext = this;
-        EndpointBox.Text = Environment.GetEnvironmentVariable("JARVIS_API_BASE_URL") ?? _settings.ReadEndpoint();
+        EndpointBox.Text = Environment.GetEnvironmentVariable("AIVO_PROXY_URL")
+            ?? Environment.GetEnvironmentVariable("JARVIS_PROXY_URL")
+            ?? Environment.GetEnvironmentVariable("JARVIS_API_BASE_URL")
+            ?? _settings.ReadEndpoint();
         TokenBox.Password = _settings.ReadToken() ?? "";
         Closing += (_, _) => StopRecognition();
     }

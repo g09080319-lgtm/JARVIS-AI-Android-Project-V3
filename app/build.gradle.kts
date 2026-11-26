@@ -9,6 +9,11 @@ plugins {
 val localProperties = Properties().apply {
     rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use(::load)
 }
+fun configuredValue(name: String): String =
+    sequenceOf(localProperties.getProperty(name), System.getenv(name))
+        .firstOrNull { !it.isNullOrBlank() }
+        .orEmpty()
+
 val signingProperties = Properties().apply {
     rootProject.file("keystore.properties").takeIf { it.exists() }?.inputStream()?.use(::load)
 }
@@ -23,16 +28,17 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "4.0.0"
-        val apiBaseUrl = sequenceOf(
-            "AIVO_PROXY_URL",
-            "JARVIS_PROXY_URL",
-            "JARVIS_API_BASE_URL",
-        ).map { localProperties.getProperty(it, "") }
+        val apiBaseUrl = sequenceOf("AIVO_PROXY_URL", "JARVIS_PROXY_URL", "JARVIS_API_BASE_URL")
+            .map(::configuredValue)
             .firstOrNull { it.isNotBlank() }
             .orEmpty()
             .replace("\\", "\\\\")
             .replace("\"", "\\\"")
         buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
+        val googleWebClientId = configuredValue("GOOGLE_WEB_CLIENT_ID")
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$googleWebClientId\"")
     }
 
     if (signingProperties.isNotEmpty()) {
@@ -70,6 +76,8 @@ dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.12.01")
     implementation(composeBom)
     implementation("androidx.activity:activity-compose:1.9.3")
+    implementation("androidx.credentials:credentials:1.5.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.5.0")
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.ui:ui")
@@ -78,6 +86,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
     debugImplementation("androidx.compose.ui:ui-tooling")
     testImplementation("junit:junit:4.13.2")
 }
