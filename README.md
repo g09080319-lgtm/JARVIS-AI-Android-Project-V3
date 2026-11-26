@@ -15,8 +15,8 @@ Google authentication is only enabled when a valid Google OAuth web client ID is
 
 The Worker is source code only. This repository does not contain a deployed URL, Google OAuth client, OIDC tenant, Anthropic key, session-signing secret, or Cloudflare account credentials.
 
-1. In Google Cloud Console, create an Android OAuth client for package `com.jarvis.ai.v4` with the applicable signing-certificate SHA-1 fingerprint, and a Web application OAuth client for token audience. Do not use the example/blank value as a credential.
-2. Set the Web client ID as Worker variable `GOOGLE_CLIENT_ID` and Android build property `GOOGLE_WEB_CLIENT_ID`. They must be the same client ID. Set `GOOGLE_ANDROID_CLIENT_ID` to the Android OAuth client ID for package `com.jarvis.ai.v4`; the Worker checks it against an ID token's authorized-party claim when present. Configure both OAuth clients and signing fingerprints in the same Google Cloud project.
+1. In Google Cloud Console, create an Android OAuth client for package `com.jarvis.ai.v4` and register the signing certificate fingerprints for each build you will test or distribute. Use `.\gradlew.bat signingReport` for the local debug certificate; use `apksigner verify --print-certs <release-apk>` to inspect a signed release certificate. Configure the SHA-1 fingerprint required by the Android OAuth client and keep the SHA-256 fingerprint available for Google services that require it. Debug, upload, and app-signing certificates can differ; register the certificate that actually signs each installed build. Create a separate Web application OAuth client for the token audience. Do not use the example/blank value as a credential.
+2. Set the Web client ID as Worker variable `GOOGLE_CLIENT_ID` and Android build property `GOOGLE_WEB_CLIENT_ID`. They must be the same client ID. Set `GOOGLE_ANDROID_CLIENT_ID` to the Android OAuth client ID for package `com.jarvis.ai.v4`; the Worker checks it against an ID token's authorized-party claim when present. Configure both OAuth clients in the same Google Cloud project.
 3. Generate a random secret of at least 32 characters and add it as a Cloudflare secret: `npx wrangler@latest secret put SESSION_SIGNING_SECRET --name jarvis-v4-api`. Never put this value in client configuration.
 4. Configure `OIDC_ISSUER`, `OIDC_JWKS_URL`, and `OIDC_AUDIENCE` only if retaining the legacy external-OIDC token path. Google sign-in has its own fixed Google issuer and JWKS endpoint.
 5. Set `ALLOWED_ORIGINS` to the exact comma-separated browser origins that may call the API. Native Android and Windows clients do not send a browser origin.
@@ -28,6 +28,12 @@ The Worker is source code only. This repository does not contain a deployed URL,
 Google ID tokens are verified against Google's published signing keys, issuer, audience and verified-email claim. The Worker issues 15-minute bearer sessions; `/v1/auth/refresh` requires a fresh Google ID token. Android sign-out clears the local encrypted token; because sessions are stateless, an already-issued token can remain valid until its 15-minute expiry.
 
 Do not commit provider keys, access tokens, `.dev.vars`, local properties, or signing keys. The checked-in `wrangler.jsonc` values are configuration placeholders and are not live service details. No deployment or live provider call is claimed.
+
+## Release signing
+
+Keep the release keystore in a secure backup location outside the repository. Do not regenerate or replace it for an app update: Android updates must retain the signing identity expected by existing installs. Create an ignored, machine-local `keystore.properties` from `keystore.properties.example` and set `storeFile`, `storePassword`, `keyAlias`, and `keyPassword`; restrict access to that file and the keystore. The Gradle release build reads these values locally and signs `bundleRelease` only when both the properties file and its referenced keystore are present. Never commit either file.
+
+The current GitHub Actions workflow does not provision signing secrets or a keystore, so its release AAB is unsigned and is not ready for Google Play. Do not upload that artifact as a production release. To enable CI signing later, deliberately add a protected GitHub Environment and a reviewed workflow step that reconstructs the keystore from encrypted secrets on the ephemeral runner, creates the ignored properties file, verifies the signed output, and removes temporary material. Do not put secret values in workflow YAML, build logs, artifacts, Android resources, or repository variables.
 
 ## Build and test
 
